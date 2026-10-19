@@ -24,6 +24,8 @@ pub const TAB_W: f32 = 200.0;
 pub const TAB_STRIDE: f32 = TAB_W + 1.0;
 /// Height of the bar (it is the window's title bar).
 pub const BAR_H: f32 = 36.0;
+/// macOS: room at the bar's left end for the native window buttons (the title bar is hidden).
+pub const TRAFFIC_LIGHTS_W: f32 = 80.0;
 /// Titles longer than this many characters end in `…`.
 const MAX_TITLE_CHARS: usize = 20;
 /// Height of the colour / active underline.
@@ -60,6 +62,8 @@ pub struct TabBar<'a> {
     pub forwards: Option<usize>,
     /// The profile sidebar is open (its toggle button is highlighted).
     pub profiles: bool,
+    /// Empty room before the headers ([`TRAFFIC_LIGHTS_W`] on macOS).
+    pub inset: f32,
 }
 
 /// `title` cut to [`MAX_TITLE_CHARS`] characters, ending in `…` when cut.
@@ -179,9 +183,15 @@ impl<'a> TabBar<'a> {
         let strip = container(strip)
             .width(Length::FillPortion(1000))
             .max_width(crate::metrics::cells_f32(self.tabs.len()) * TAB_STRIDE);
-        let tabs = row![strip, plus, picker, space().width(Length::FillPortion(1))]
-            .align_y(Alignment::Center)
-            .width(Length::Fill);
+        let tabs = row![
+            space().width(self.inset),
+            strip,
+            plus,
+            picker,
+            space().width(Length::FillPortion(1))
+        ]
+        .align_y(Alignment::Center)
+        .width(Length::Fill);
         // The bar's empty part (tab headers and buttons take their own presses first).
         let tabs = mouse_area(tabs)
             .on_press(Message::Window(WindowCmd::Press))

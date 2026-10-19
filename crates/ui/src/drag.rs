@@ -170,7 +170,10 @@ impl App {
         }
         drag.target = None;
         // Over a header: show that tab, so the drop can land on its panes.
-        let hovered = self.tabs.get(header_at(at.x)).map(|t| t.id);
+        let hovered = self
+            .tabs
+            .get(header_at(at.x - self.bar_inset()))
+            .map(|t| t.id);
         if let Some(tab) = hovered.filter(|t| *t != self.active) {
             self.activate(tab);
         }
@@ -188,7 +191,8 @@ impl App {
         }
         if drag.at.y < BAR_H {
             if let Payload::Tab(tab) = drag.payload {
-                self.reorder_tab(tab, insertion_index(drag.at.x, self.tabs.len()));
+                let x = drag.at.x - self.bar_inset();
+                self.reorder_tab(tab, insertion_index(x, self.tabs.len()));
             }
             return Task::none();
         }

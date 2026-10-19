@@ -124,6 +124,15 @@ impl App {
         self.chrome(split.into(), sftp, dialog)
     }
 
+    /// Room before the tab headers: the native window buttons on macOS (hidden in full screen).
+    pub(crate) fn bar_inset(&self) -> f32 {
+        if cfg!(target_os = "macos") && !self.fullscreen {
+            crate::tab_bar::TRAFFIC_LIGHTS_W
+        } else {
+            0.0
+        }
+    }
+
     /// The tab bar above `body` (the panes or an editor page), toasts, the profile sidebar and
     /// the overlays.
     fn chrome<'a>(
@@ -146,6 +155,7 @@ impl App {
                     .then(|| crate::forwards_dialog::listening(tab.panes.values()))
             }),
             profiles: self.profiles.open,
+            inset: self.bar_inset(),
         }
         .view();
         // Toasts are layered over the panes only, never over the tab bar. The stack is always

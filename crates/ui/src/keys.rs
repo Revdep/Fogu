@@ -314,7 +314,7 @@ mod tests {
 
     #[test]
     fn hotkey_lookup_falls_back_to_the_shifted_key() {
-        let hotkeys = Hotkeys::default_keymap();
+        let hotkeys = Hotkeys::default_keymap_for(false);
         let ctrl_shift = Modifiers::CTRL | Modifiers::SHIFT;
         let ch = |c: &str| Key::Character(c.into());
         assert_eq!(

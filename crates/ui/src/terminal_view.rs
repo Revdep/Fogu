@@ -109,9 +109,10 @@ impl<'a> TerminalView<'a> {
         cursor: mouse::Cursor,
         shell: &mut Shell<'_, Message>,
     ) -> bool {
+        // Ctrl, or Cmd on macOS.
         let ctrl = match event {
-            Event::Keyboard(keyboard::Event::ModifiersChanged(m)) => m.control(),
-            _ => state.modifiers.control(),
+            Event::Keyboard(keyboard::Event::ModifiersChanged(m)) => m.command(),
+            _ => state.modifiers.command(),
         };
         let link_under = || {
             let at = cursor.position_over(bounds)? - bounds.position();

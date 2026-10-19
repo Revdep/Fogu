@@ -307,10 +307,13 @@ mod tests {
     #[test]
     fn default_config_has_the_default_keymap() {
         let config = Config::default();
+        let new_tab = if cfg!(target_os = "macos") {
+            "Cmd-T"
+        } else {
+            "Ctrl-Shift-T"
+        };
         assert_eq!(
-            config
-                .hotkeys
-                .lookup(KeyChord::parse("Ctrl-Shift-T").unwrap()),
+            config.hotkeys.lookup(KeyChord::parse(new_tab).unwrap()),
             Some(Action::NewTab)
         );
     }

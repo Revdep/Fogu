@@ -282,12 +282,19 @@ impl Hotkeys {
     /// most Linux terminals; scrolling uses Shift with `PageUp`, `PageDown`, `Home` and `End` (plus
     /// Alt-PageUp/PageDown).
     #[must_use]
+    pub fn default_keymap() -> Self {
+        Self::default_keymap_for(cfg!(target_os = "macos"))
+    }
+
+    /// The default keymap of Linux, or of macOS when `macos` (Cmd-based; actions only Fogu has
+    /// move Ctrl-Shift to Cmd-Shift).
+    #[must_use]
     #[expect(
         clippy::expect_used,
         reason = "fixed table of valid chord strings; covered by \
                   `default_keymap_parses` below"
     )]
-    pub fn default_keymap() -> Self {
+    pub fn default_keymap_for(macos: bool) -> Self {
         let chord = |s: &str| KeyChord::parse(s).expect("valid default chord");
         let chords = |strs: &[&str]| strs.iter().map(|s| chord(s)).collect::<Vec<_>>();
 
@@ -357,6 +364,9 @@ impl Hotkeys {
         ] {
             bindings.insert(Action::ResizePane(dir), chords(&[key]));
         }
+        if macos {
+            macos_overrides(&mut bindings);
+        }
         Self::new(bindings)
     }
 
@@ -385,6 +395,62 @@ impl Serialize for Hotkeys {
     }
 }
 
+/// macOS replaces these defaults (see [`Hotkeys::default_keymap_for`]).
+#[expect(
+    clippy::expect_used,
+    reason = "fixed table of valid chord strings; covered by `default_keymap_macos`"
+)]
+fn macos_overrides(bindings: &mut BTreeMap<Action, Vec<KeyChord>>) {
+    let chords = |strs: &[&str]| {
+        strs.iter()
+            .map(|s| KeyChord::parse(s).expect("valid default chord"))
+            .collect::<Vec<_>>()
+    };
+    let mac: &[(Action, &[&str])] = &[
+        (Action::NewTab, &["Cmd-T"]),
+        (Action::CloseTab, &["Cmd-W"]),
+        (Action::NextTab, &["Ctrl-Tab"]),
+        (Action::PrevTab, &["Ctrl-Shift-Tab"]),
+        (Action::GoToTab(10), &[]),
+        (Action::RenameTab, &["Cmd-R"]),
+        (Action::SplitRight, &["Cmd-Shift-D"]),
+        (Action::SplitDown, &["Cmd-D"]),
+        (Action::ClosePane, &["Cmd-Shift-W"]),
+        (Action::MaximizePane, &["Cmd-Alt-Enter"]),
+        (Action::Copy, &["Cmd-C"]),
+        (Action::Paste, &["Cmd-V"]),
+        (Action::SelectAll, &["Cmd-A"]),
+        (Action::Clear, &["Cmd-K"]),
+        (Action::ZoomIn, &["Cmd-=", "Cmd-Shift-="]),
+        (Action::ZoomOut, &["Cmd--", "Cmd-Shift--"]),
+        (Action::ZoomReset, &["Cmd-0"]),
+        (Action::ScrollPageUp, &["Alt-PageUp"]),
+        (Action::ScrollPageDown, &["Alt-PageDown"]),
+        (Action::ScrollTop, &["Shift-PageUp"]),
+        (Action::ScrollBottom, &["Shift-PageDown"]),
+        (Action::ToggleFullscreen, &["Ctrl-Cmd-F"]),
+        (Action::OpenProfilePicker, &["Cmd-E"]),
+        (Action::ToggleSftp, &["Cmd-Shift-O"]),
+        (Action::ToggleProfiles, &["Cmd-Shift-M"]),
+    ];
+    for (action, keys) in mac {
+        bindings.insert(*action, chords(keys));
+    }
+    for n in 1..=9u8 {
+        bindings.insert(Action::GoToTab(n), chords(&[&format!("Cmd-{n}")]));
+    }
+    for (dir, key) in [
+        (Dir::Left, "Left"),
+        (Dir::Right, "Right"),
+        (Dir::Up, "Up"),
+        (Dir::Down, "Down"),
+    ] {
+        bindings.insert(Action::PaneNav(dir), chords(&[&format!("Cmd-Alt-{key}")]));
+        let resize = format!("Cmd-Alt-Shift-{key}");
+        bindings.insert(Action::ResizePane(dir), chords(&[&resize]));
+    }
+}
+
 impl<'de> Deserialize<'de> for Hotkeys {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         // `[hotkeys]` overrides the defaults per action (`[]` unbinds); a chord the user assigns is
@@ -408,21 +474,45 @@ mod tests {
 
     #[test]
     fn user_hotkeys_merge_over_the_defaults() {
-        let keymap: Hotkeys = toml::from_str(
-            r#"copy = ["Ctrl-Shift-T"]
-paste = []"#,
-        )
-        .unwrap();
-        let chord = |s| KeyChord::parse(s).unwrap();
-        assert_eq!(keymap.lookup(chord("Ctrl-Shift-T")), Some(Action::Copy));
-        assert_eq!(keymap.lookup(chord("Ctrl-Shift-W")), Some(Action::CloseTab));
+        // The platform's defaults: Ctrl-Shift-T / Ctrl-Shift-W, or Cmd-T / Cmd-W on macOS.
+        let defaults = Hotkeys::default_keymap();
+        let first = |a| defaults.chords_for(a).first().copied().unwrap();
+        let (new_tab, close_tab) = (first(Action::NewTab), first(Action::CloseTab));
+        let keymap: Hotkeys =
+            toml::from_str(&format!("copy = [\"{new_tab}\"]\npaste = []")).unwrap();
+        assert_eq!(keymap.lookup(new_tab), Some(Action::Copy));
+        assert_eq!(keymap.lookup(close_tab), Some(Action::CloseTab));
         assert_eq!(keymap.bindings()[&Action::NewTab], Vec::<KeyChord>::new());
         assert_eq!(keymap.bindings()[&Action::Paste], Vec::<KeyChord>::new());
     }
 
     #[test]
+    fn default_keymap_macos() {
+        let keymap = Hotkeys::default_keymap_for(true);
+        let chord = |s| KeyChord::parse(s).unwrap();
+        assert_eq!(keymap.lookup(chord("Cmd-T")), Some(Action::NewTab));
+        assert_eq!(keymap.lookup(chord("Cmd-D")), Some(Action::SplitDown));
+        assert_eq!(
+            keymap.lookup(chord("Cmd-Shift-D")),
+            Some(Action::SplitRight)
+        );
+        assert_eq!(keymap.lookup(chord("Cmd-9")), Some(Action::GoToTab(9)));
+        assert_eq!(
+            keymap.lookup(chord("Cmd-Option-Left")),
+            Some(Action::PaneNav(Dir::Left))
+        );
+        assert_eq!(
+            keymap.lookup(chord("Ctrl-Cmd-F")),
+            Some(Action::ToggleFullscreen)
+        );
+        // Linux chords are gone, so the shell gets them.
+        assert_eq!(keymap.lookup(chord("Ctrl-Shift-T")), None);
+        assert_eq!(keymap.lookup(chord("Alt-1")), None);
+    }
+
+    #[test]
     fn default_keymap_parses() {
-        let keymap = Hotkeys::default_keymap();
+        let keymap = Hotkeys::default_keymap_for(false);
         assert_eq!(
             keymap.lookup(KeyChord::parse("Ctrl-Shift-T").unwrap()),
             Some(Action::NewTab)

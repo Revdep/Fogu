@@ -51,7 +51,25 @@ pub(crate) fn describe(err: &SessionError) -> String {
 fn write_clipboard(request: ClipboardRequest) -> Task<Message> {
     match request.target {
         ClipboardType::Clipboard => clipboard::write(request.payload),
-        ClipboardType::Selection => clipboard::write_primary(request.payload),
+        ClipboardType::Selection => write_selection(request.payload),
+    }
+}
+
+/// Writes the primary selection; macOS has none, so the clipboard there.
+pub(crate) fn write_selection<T>(text: String) -> Task<T> {
+    if cfg!(target_os = "macos") {
+        clipboard::write(text)
+    } else {
+        clipboard::write_primary(text)
+    }
+}
+
+/// Reads the primary selection (the clipboard on macOS, see [`write_selection`]).
+pub(crate) fn read_selection() -> Task<Option<String>> {
+    if cfg!(target_os = "macos") {
+        clipboard::read()
+    } else {
+        clipboard::read_primary()
     }
 }
 

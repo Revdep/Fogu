@@ -105,15 +105,23 @@ pub fn run(config: Arc<Config>, options: RunOptions) -> Result {
     let window = iced::window::Settings {
         size: app::WINDOW_SIZE,
         icon: iced::window::icon::from_rgba(ICON_RGBA.to_vec(), ICON_SIZE, ICON_SIZE).ok(),
+        #[cfg(target_os = "linux")]
         platform_specific: iced::window::settings::PlatformSpecific {
-            #[cfg(target_os = "linux")]
             application_id: APP_ID.to_owned(),
             ..Default::default()
+        },
+        // macOS: the title bar is hidden and the content runs under it, so the native window
+        // buttons sit over the tab bar (`tab_bar::TRAFFIC_LIGHTS_W`).
+        #[cfg(target_os = "macos")]
+        platform_specific: iced::window::settings::PlatformSpecific {
+            title_hidden: true,
+            titlebar_transparent: true,
+            fullsize_content_view: true,
         },
         // `Message::CloseRequested` saves the session (tab recovery), then exits.
         exit_on_close_request: false,
         // The tab bar is the title bar (move, maximize and window buttons, resize edges); macOS
-        // keeps its native title bar, as winit cannot resize an undecorated window there.
+        // keeps a native frame, as winit cannot resize an undecorated window there.
         decorations: cfg!(target_os = "macos"),
         ..Default::default()
     };

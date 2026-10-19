@@ -130,18 +130,21 @@ Hosts from `~/.ssh/config` appear in the sidebar automatically.
 
 ### Default keys
 
-| Action | Keys |
-|---|---|
-| New tab / close tab | `Ctrl+Shift+T` / `Ctrl+Shift+W` |
-| Profile picker | `Ctrl+Shift+E` |
-| Profiles sidebar / SFTP panel | `Ctrl+Shift+M` / `Ctrl+Shift+O` |
-| Split right / split down | `Ctrl+Shift+S` / `Ctrl+Shift+D` |
-| Move between panes | `Ctrl+Alt+Arrows` |
-| Copy / paste | `Ctrl+Shift+C` / `Ctrl+Shift+V` |
-| Zoom | `Ctrl+=` / `Ctrl+-` / `Ctrl+0` |
-| Full screen | `F11` |
+| Action | Linux | macOS |
+|---|---|---|
+| New tab / close tab | `Ctrl+Shift+T` / `Ctrl+Shift+W` | `Cmd+T` / `Cmd+W` |
+| Go to tab 1-9 | `Alt+1`..`Alt+9` | `Cmd+1`..`Cmd+9` |
+| Profile picker | `Ctrl+Shift+E` | `Cmd+E` |
+| Profiles sidebar / SFTP panel | `Ctrl+Shift+M` / `Ctrl+Shift+O` | `Cmd+Shift+M` / `Cmd+Shift+O` |
+| Split right / split down | `Ctrl+Shift+S` / `Ctrl+Shift+D` | `Cmd+Shift+D` / `Cmd+D` |
+| Move between panes | `Ctrl+Alt+Arrows` | `Cmd+Option+Arrows` |
+| Copy / paste | `Ctrl+Shift+C` / `Ctrl+Shift+V` | `Cmd+C` / `Cmd+V` |
+| Clear | | `Cmd+K` |
+| Zoom | `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | `Cmd+=` / `Cmd+-` / `Cmd+0` |
+| Full screen | `F11` | `Ctrl+Cmd+F` |
 
-Every action can be rebound under `[hotkeys]`.
+Every action can be rebound under `[hotkeys]`; on macOS `Cmd` and `Option` are accepted as
+modifier names.
 
 ### Command line
 

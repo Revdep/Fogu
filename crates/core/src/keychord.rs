@@ -1,5 +1,5 @@
-//! Hotkey chord parsing: dash-separated string syntax (`Ctrl-Shift-T`), case-insensitive, no `⌘`
-//! (macOS-only, not needed on Linux). Multi-chord sequences (`Ctrl-K Ctrl-C`) are out of scope;
+//! Hotkey chord parsing: dash-separated string syntax (`Ctrl-Shift-T`, `Cmd-Option-Left`),
+//! case-insensitive; no `⌘` glyphs. Multi-chord sequences (`Ctrl-K Ctrl-C`) are out of scope;
 //! they fail to parse as a single chord.
 
 use std::fmt;
@@ -155,9 +155,9 @@ impl KeyChord {
             for part in mods_str.split('-') {
                 match part.to_ascii_lowercase().as_str() {
                     "ctrl" | "control" => mods.ctrl = true,
-                    "alt" => mods.alt = true,
+                    "alt" | "option" | "opt" => mods.alt = true,
                     "shift" => mods.shift = true,
-                    "meta" | "super" | "win" => mods.meta = true,
+                    "meta" | "super" | "win" | "cmd" | "command" => mods.meta = true,
                     _ => return Err(KeyChordError::UnknownModifier(part.to_owned())),
                 }
             }
@@ -217,18 +217,24 @@ impl FromStr for KeyChord {
 impl fmt::Display for KeyChord {
     /// Canonical order `Ctrl-Alt-Shift-Meta-<key>`; parsing (above) accepts any modifier
     /// order, but this picks one so round-tripping through config is deterministic.
+    /// macOS names Alt and Meta `Option-` and `Cmd-`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (alt, meta) = if cfg!(target_os = "macos") {
+            ("Option-", "Cmd-")
+        } else {
+            ("Alt-", "Meta-")
+        };
         if self.mods.ctrl {
             write!(f, "Ctrl-")?;
         }
         if self.mods.alt {
-            write!(f, "Alt-")?;
+            write!(f, "{alt}")?;
         }
         if self.mods.shift {
             write!(f, "Shift-")?;
         }
         if self.mods.meta {
-            write!(f, "Meta-")?;
+            write!(f, "{meta}")?;
         }
         match self.key {
             KeyName::Char(c) => write!(f, "{c}"),

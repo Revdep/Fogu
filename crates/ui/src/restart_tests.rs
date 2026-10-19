@@ -128,11 +128,17 @@ fn modifiers_unencodable_keys_and_app_shortcuts_do_not_restart() {
     // A key without an encoding (F13) is ignored.
     send(&mut app, key(KeyCode::F(13), Mods::default()));
     assert_eq!(pane(&app), old);
-    // Ctrl+Shift+T / Ctrl+Shift+W are actions (the widget never sends them as keys).
+    // Ctrl+Shift+T / Ctrl+Shift+W (Cmd+T / Cmd+W on macOS) are actions (the widget never sends
+    // them as keys).
     let hotkeys = &app.config.hotkeys;
+    let mods = if cfg!(target_os = "macos") {
+        Modifiers::LOGO
+    } else {
+        Modifiers::CTRL | Modifiers::SHIFT
+    };
     let chord = |c: &str| {
         let k = Key::Character(c.into());
-        keys::hotkey(hotkeys, &k, &k, Modifiers::CTRL | Modifiers::SHIFT)
+        keys::hotkey(hotkeys, &k, &k, mods)
     };
     assert_eq!(chord("t"), Some(Action::NewTab));
     assert_eq!(chord("w"), Some(Action::CloseTab));

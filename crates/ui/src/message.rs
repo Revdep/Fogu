@@ -168,9 +168,9 @@ pub enum Message {
     Window(WindowCmd),
     /// Dragging tabs, panes and sidebar profiles.
     Drag(crate::drag::DragMsg),
-    /// The link under the pointer of a pane changed (Ctrl held, or a right-press).
+    /// The link under the pointer of a pane changed (Ctrl/Cmd held, or a right-press).
     LinkHover(PaneId, Option<fogu_term::links::Link>),
-    /// Ctrl+click or "Open link".
+    /// Ctrl+click (Cmd+click on macOS) or "Open link".
     OpenLink(PaneId, fogu_term::links::Link),
     /// "Copy link".
     CopyLink(String),

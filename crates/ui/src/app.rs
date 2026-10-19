@@ -435,7 +435,7 @@ impl App {
             Message::Paste(source) => {
                 return match source {
                     PasteSource::Clipboard => clipboard::read(),
-                    PasteSource::Primary => clipboard::read_primary(),
+                    PasteSource::Primary => crate::lifecycle::read_selection(),
                 }
                 .map(move |text| Message::Pane(id, Box::new(Message::PasteReady(text))));
             }
@@ -507,7 +507,7 @@ impl App {
             SelectEvent::Clear => term.clear_selection(),
             SelectEvent::Finish => {
                 return match term.selection_text() {
-                    Some(text) if copy_on_select => clipboard::write_primary(text),
+                    Some(text) if copy_on_select => crate::lifecycle::write_selection(text),
                     _ => Task::none(),
                 };
             }
