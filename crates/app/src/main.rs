@@ -46,20 +46,36 @@ fn main() -> fogu_ui::Result {
     fogu_ui::run(Arc::new(config), options)
 }
 
-/// Release builds: `PR_SET_DUMPABLE=0` (no core dumps, no ptrace attach by same-uid processes,
-/// `/proc/<pid>/mem` unreadable) because SSH secrets will live in memory. Debug builds skip it so
-/// debuggers work. Runs first, and again after the `--software-render` re-exec (exec resets the
-/// flag).
+/// Release builds: no core dumps because SSH secrets will live in memory. On Linux
+/// `PR_SET_DUMPABLE=0` also blocks ptrace attach by same-uid processes and makes
+/// `/proc/<pid>/mem` unreadable; macOS only gets core dumps off (anti-attach needs FFI, which
+/// `unsafe_code = "forbid"` rules out). Debug builds skip it so debuggers work. Runs first, and
+/// again after the `--software-render` re-exec (exec resets the flag).
 fn harden_process() {
     if cfg!(debug_assertions) {
         return;
     }
-    if let Err(err) =
-        rustix::process::set_dumpable_behavior(rustix::process::DumpableBehavior::NotDumpable)
-    {
+    if let Err(err) = make_undumpable() {
         // Logging is not up yet; this is a hardening failure the user should see.
         eprintln!("fogu: could not make the process non-dumpable: {err}");
     }
+}
+
+#[cfg(target_os = "linux")]
+fn make_undumpable() -> rustix::io::Result<()> {
+    rustix::process::set_dumpable_behavior(rustix::process::DumpableBehavior::NotDumpable)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn make_undumpable() -> rustix::io::Result<()> {
+    use rustix::process::{Resource, Rlimit, setrlimit};
+    setrlimit(
+        Resource::Core,
+        Rlimit {
+            current: Some(0),
+            maximum: Some(0),
+        },
+    )
 }
 
 /// Loads `config.toml` from `--config-dir` or `$XDG_CONFIG_HOME/fogu`. A missing file is

@@ -129,6 +129,31 @@ pub fn key_input(
     })
 }
 
+/// macOS: Option composes characters (Option+f = `ƒ`, Option+ò = `@` on an Italian layout).
+/// Option + ASCII letter stays Meta: the key becomes the letter itself, sent as ESC + letter
+/// when `alt_is_meta` (else the composed text). Option + anything else is just its character.
+/// `key` is the layout key without modifiers.
+pub fn macos_option(mut input: KeyInput, key: &Key) -> KeyInput {
+    if !input.mods.alt || !matches!(input.key, KeyCode::Char(_)) {
+        return input;
+    }
+    match key {
+        Key::Character(s) => match s.as_bytes() {
+            [b] if b.is_ascii_alphabetic() => {
+                let b = if input.mods.shift {
+                    b.to_ascii_uppercase()
+                } else {
+                    b.to_ascii_lowercase()
+                };
+                input.key = KeyCode::Char(char::from(b));
+            }
+            _ => input.mods.alt = false,
+        },
+        _ => input.mods.alt = false,
+    }
+    input
+}
+
 /// iced modifiers as the encoder's [`Mods`].
 pub fn mods(modifiers: Modifiers) -> Mods {
     Mods {
@@ -219,6 +244,46 @@ mod tests {
             None,
         );
         assert_eq!(none, None);
+    }
+
+    /// What the shell receives for Option + `key` (the layout key without modifiers) when the
+    /// layout composes `composed`.
+    #[cfg(target_os = "macos")]
+    fn option_bytes(key: &str, composed: &str, mods: Modifiers, alt_is_meta: bool) -> Vec<u8> {
+        let ch = |c: &str| Key::Character(c.into());
+        let input = key_input(&ch(composed), Location::Standard, mods, Some(composed)).unwrap();
+        let input = macos_option(input, &ch(key));
+        fogu_term::input::encode_key(&input, fogu_term::TermMode::empty(), alt_is_meta).unwrap()
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_option_letters_are_meta_other_keys_type_their_character() {
+        let alt = Modifiers::ALT;
+        let shift = Modifiers::ALT | Modifiers::SHIFT;
+        let rows: [(&str, &str, Modifiers, bool, &[u8]); 9] = [
+            ("f", "ƒ", alt, true, b"\x1bf"),
+            ("b", "∫", alt, true, b"\x1bb"),
+            ("f", "Ï", shift, true, b"\x1bF"),
+            ("f", "ƒ", alt | Modifiers::CTRL, true, b"\x1b\x06"),
+            ("f", "ƒ", alt, false, "ƒ".as_bytes()),
+            // Italian layout: @ # [ { ~ need Option and must arrive bare.
+            ("ò", "@", alt, true, b"@"),
+            ("à", "#", alt, true, b"#"),
+            ("è", "{", shift, true, b"{"),
+            ("5", "~", alt, true, b"~"),
+        ];
+        for (key, composed, mods, alt_is_meta, want) in rows {
+            assert_eq!(
+                option_bytes(key, composed, mods, alt_is_meta),
+                want,
+                "{key} {composed} {mods:?} alt_is_meta={alt_is_meta}"
+            );
+        }
+        // Named keys keep Option (word moves on Option+arrows).
+        let left = key_input(&Key::Named(Named::ArrowLeft), Location::Standard, alt, None);
+        let left = macos_option(left.unwrap(), &Key::Named(Named::ArrowLeft));
+        assert!(left.mods.alt);
     }
 
     #[test]

@@ -198,6 +198,10 @@ pub fn resolve(family: &str, fallbacks: &[String]) -> (ResolvedFont, Vec<String>
     let mut system = font_system()
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if cfg!(target_os = "macos") {
+        // cosmic-text's generic monospace is Noto Sans Mono, which stock macOS lacks.
+        system.raw().db_mut().set_monospace_family("Menlo");
+    }
     let db = system.raw().db();
     let mut problems = Vec::new();
     for fallback in fallbacks {

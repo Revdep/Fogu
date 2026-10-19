@@ -44,3 +44,32 @@ fn owned_sockets_needs_a_private_dir_of_ours() {
     assert!(owned_sockets(&dir, uid).is_empty(), "world-writable dir");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn wait_for_pid_lives_with_the_pid() {
+    let wait = |pid: u32| {
+        std::process::Command::new("sh")
+            .args(["-c", WAIT_FOR_PID, "_", &pid.to_string()])
+            // the killed loop's `sleep` outlives the test; keep it off the test's output pipes
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap()
+    };
+    let mut gone = std::process::Command::new("true").spawn().unwrap();
+    let gone_pid = gone.id();
+    gone.wait().unwrap();
+    assert!(
+        wait(gone_pid).wait().unwrap().success(),
+        "exits once the pid is gone"
+    );
+
+    let mut alive = wait(std::process::id());
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    assert!(
+        alive.try_wait().unwrap().is_none(),
+        "keeps running while we do"
+    );
+    alive.kill().unwrap();
+    alive.wait().unwrap();
+}

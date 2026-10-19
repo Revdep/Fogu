@@ -168,6 +168,19 @@ const LAUNCHABLE: &[&str] = &[
     "plasmoid",
 ];
 
+/// macOS: `open` also runs these; `.app`/`.workflow` are bundles (directories), so refused
+/// whatever their type.
+const LAUNCHABLE_MACOS: &[&str] = &[
+    "app", "pkg", "mpkg", "dmg", "command", "tool", "terminal", "workflow", "scpt",
+];
+
+/// `xdg-open`, or `open` on macOS.
+const OPENER: &str = if cfg!(target_os = "macos") {
+    "open"
+} else {
+    "xdg-open"
+};
+
 /// Why `path` must not be handed to `xdg-open`: not absolute, missing, a regular file with an
 /// executable bit, or one of the [`LAUNCHABLE`] types. Downloads are `0644` unless
 /// `keep_executable_bit` is on, but the opener picks by type: a downloaded `.jar` would be run
@@ -179,11 +192,14 @@ fn refuse_open(path: &Path) -> Result<(), String> {
         Ok(meta) if path.is_absolute() => meta,
         _ => return Err(format!("{} does not exist", shown())),
     };
-    let launchable = path
+    let ext = path
         .extension()
         .and_then(|e| e.to_str())
-        .is_some_and(|e| LAUNCHABLE.contains(&e.to_ascii_lowercase().as_str()));
-    if meta.is_file() && (meta.permissions().mode() & 0o111 != 0 || launchable) {
+        .map(str::to_ascii_lowercase);
+    let listed = |list: &[&str]| ext.as_deref().is_some_and(|e| list.contains(&e));
+    let launchable = listed(LAUNCHABLE);
+    let bundle = cfg!(target_os = "macos") && listed(LAUNCHABLE_MACOS);
+    if bundle || meta.is_file() && (meta.permissions().mode() & 0o111 != 0 || launchable) {
         return Err(format!(
             "{} could run code and is not opened from here; use \u{201c}Show in file \
              manager\u{201d}",
@@ -193,29 +209,30 @@ fn refuse_open(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Runs `xdg-open <target>` and waits for it (it returns once the application started).
+/// Runs `xdg-open <target>` ([`OPENER`]) and waits for it (it returns once the application
+/// started).
 async fn xdg_open(target: &std::ffi::OsStr) -> Result<(), String> {
-    let status = tokio::process::Command::new("xdg-open")
+    let status = tokio::process::Command::new(OPENER)
         .arg(target)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
         .await
-        .map_err(|e| format!("xdg-open: {e}"))?;
+        .map_err(|e| format!("{OPENER}: {e}"))?;
     if status.success() {
         return Ok(());
     }
     Err(format!(
-        "xdg-open could not open {} ({status})",
+        "{OPENER} could not open {} ({status})",
         display_name(&target.to_string_lossy())
     ))
 }
 
-/// Whether a file picker can open: `zenity` on `PATH`, or a session bus with the desktop
-/// portal service installed.
+/// Whether a file picker can open: always on macOS (native panel), else `zenity` on `PATH`, or a
+/// session bus with the desktop portal service installed.
 pub(crate) fn picker_available() -> bool {
-    in_path("zenity") || portal_installed()
+    cfg!(target_os = "macos") || in_path("zenity") || portal_installed()
 }
 
 /// The toast shown instead of a picker that cannot open.
@@ -277,6 +294,25 @@ mod tests {
                 .contains("does not exist")
         );
         assert!(refuse_open(std::path::Path::new("report.txt")).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn macos_bundles_and_installers_are_not_opened() {
+        let dir = std::env::temp_dir().join(format!("fogu-open-mac-{}", std::process::id()));
+        let _stale = std::fs::remove_dir_all(&dir);
+        let app = dir.join("Evil.app");
+        std::fs::create_dir_all(&app).unwrap();
+        let dmg = dir.join("setup.DMG");
+        std::fs::write(&dmg, "x").unwrap();
+        for path in [&app, &dmg] {
+            assert_eq!(
+                refuse_open(path).is_err(),
+                cfg!(target_os = "macos"),
+                "{}",
+                path.display()
+            );
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

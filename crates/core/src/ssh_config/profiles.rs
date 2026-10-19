@@ -152,6 +152,8 @@ impl Mapper {
         let bad = |m: &mut Self| m.note(&format!("{} {} (invalid value)", d.name, d.raw));
         match d.key.as_str() {
             "hostname" | "user" => {}
+            // Apple's OpenSSH options, in nearly every macOS config: not worth a note each.
+            "usekeychain" | "addkeystoagent" if cfg!(target_os = "macos") => {}
             "port" => match arg.parse::<u16>() {
                 Ok(port) if port > 0 => self.opts.port = Some(port),
                 _ => bad(self),

@@ -209,7 +209,8 @@ impl App {
             }
             None => base,
         };
-        if self.fullscreen {
+        // macOS: winit cannot start a resize from the app; the native frame resizes instead.
+        if self.fullscreen || cfg!(target_os = "macos") {
             return base;
         }
         iced::widget::stack![base, crate::tab_bar::resize_edges()].into()

@@ -29,7 +29,7 @@ pub use config::ssh_opts::{
 };
 pub use keychord::{KeyChord, KeyName, Mods, NamedKey};
 pub use profile::{
-    EffectiveProfile, Group, GroupId, LocalOpts, LocalProfile, Osc52Policy, Profile,
+    DEFAULT_LOGIN, EffectiveProfile, Group, GroupId, LocalOpts, LocalProfile, Osc52Policy, Profile,
     ProfileDefaults, ProfileId, ProfileKind, SessionEndBehavior, effective_osc52_write, resolve,
     strip_defaults,
 };

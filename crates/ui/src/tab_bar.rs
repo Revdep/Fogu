@@ -219,34 +219,37 @@ impl<'a> TabBar<'a> {
                 Message::Action(Action::ToggleSftp),
             ));
         }
-        bar_row = bar_row
-            .push(toggle(
-                Icon::Sidebar,
-                self.profiles,
-                "Profiles (toggle-profiles)".to_owned(),
-                Message::Action(Action::ToggleProfiles),
-            ))
-            .push(space().width(8))
-            .push(solid(look.border, Length::Fixed(1.0), 18.0))
-            .push(space().width(8))
-            .push(window_button(
-                Icon::Minimize,
-                look,
-                false,
-                Message::Window(WindowCmd::Minimize),
-            ))
-            .push(window_button(
-                Icon::Maximize,
-                look,
-                false,
-                Message::Window(WindowCmd::ToggleMaximize),
-            ))
-            .push(window_button(
-                Icon::Close,
-                look,
-                true,
-                Message::CloseRequested,
-            ));
+        bar_row = bar_row.push(toggle(
+            Icon::Sidebar,
+            self.profiles,
+            "Profiles (toggle-profiles)".to_owned(),
+            Message::Action(Action::ToggleProfiles),
+        ));
+        // macOS: the native title bar has the window buttons.
+        if !cfg!(target_os = "macos") {
+            bar_row = bar_row
+                .push(space().width(8))
+                .push(solid(look.border, Length::Fixed(1.0), 18.0))
+                .push(space().width(8))
+                .push(window_button(
+                    Icon::Minimize,
+                    look,
+                    false,
+                    Message::Window(WindowCmd::Minimize),
+                ))
+                .push(window_button(
+                    Icon::Maximize,
+                    look,
+                    false,
+                    Message::Window(WindowCmd::ToggleMaximize),
+                ))
+                .push(window_button(
+                    Icon::Close,
+                    look,
+                    true,
+                    Message::CloseRequested,
+                ));
+        }
         let bar = container(bar_row)
             .width(Length::Fill)
             .height(BAR_H)

@@ -153,12 +153,19 @@ pub(crate) async fn connect_or_start(configured: Option<&Path>) -> Option<Agent>
     None
 }
 
-/// Starts `ssh-agent -a <socket> tail --pid=<us> -f /dev/null`: OpenSSH's agent runs the command
-/// as its child and exits with it, so it never outlives Fogu.
+/// macOS stand-in for `tail --pid` (GNU-only; BSD tail exits at once and takes the agent with
+/// it): lives while the pid in `$1` does.
+const WAIT_FOR_PID: &str = r#"while kill -0 "$1" 2>/dev/null; do sleep 5; done"#;
+
+/// Starts `ssh-agent -a <socket> tail --pid=<us> -f /dev/null` ([`WAIT_FOR_PID`] on macOS):
+/// OpenSSH's agent runs the command as its child and exits with it, so it never outlives Fogu.
 fn start_private() -> Option<PathBuf> {
     // Never under a shared /tmp: another user could pre-create the directory and swap the
-    // socket before a decrypted RSA key is handed to it.
-    let Some(base) = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from) else {
+    // socket before a decrypted RSA key is handed to it. macOS has no XDG_RUNTIME_DIR, but its
+    // TMPDIR is a per-user 0700 directory under /var/folders.
+    let base = std::env::var_os("XDG_RUNTIME_DIR")
+        .or_else(|| std::env::var_os("TMPDIR").filter(|_| cfg!(target_os = "macos")));
+    let Some(base) = base.map(PathBuf::from) else {
         tracing::warn!("no XDG_RUNTIME_DIR: not starting a private ssh-agent");
         return None;
     };
@@ -178,15 +185,17 @@ fn start_private() -> Option<PathBuf> {
     }
     let socket = dir.join(format!("agent-{}.sock", std::process::id()));
     let _ = std::fs::remove_file(&socket);
+    let pid = std::process::id().to_string();
+    let tail_pid = format!("--pid={pid}");
+    let keep_alive: &[&str] = if cfg!(target_os = "macos") {
+        &["sh", "-c", WAIT_FOR_PID, "_", &pid]
+    } else {
+        &["tail", &tail_pid, "-f", "/dev/null"]
+    };
     let spawned = std::process::Command::new("ssh-agent")
         .arg("-a")
         .arg(&socket)
-        .args([
-            "tail",
-            &format!("--pid={}", std::process::id()),
-            "-f",
-            "/dev/null",
-        ])
+        .args(keep_alive)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

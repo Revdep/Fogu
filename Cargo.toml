@@ -47,9 +47,9 @@ tracing-appender = "0.2.5"
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "sync", "process", "io-util", "time", "macros", "net"] }
 # why: tokio-native PTY open/spawn/resize without unsafe in our code.
 pty-process = { version = "0.5.3", features = ["async"] }
-# why: safe `dup`, `tcsetwinsize`, `getuid` and process-group SIGKILL; already in the
+# why: safe `dup`, `tcsetwinsize`, `getuid`, process-group SIGKILL and `uname`; already in the
 # tree via pty-process.
-rustix = { version = "1.1.5", features = ["termios", "process", "fs"] }
+rustix = { version = "1.1.5", features = ["termios", "process", "fs", "system"] }
 # why: cheap shareable byte buffers for `SessionInput::Data` and the pending-write queue.
 bytes = "1.12.1"
 # why: one error enum per library domain (`SessionError`).

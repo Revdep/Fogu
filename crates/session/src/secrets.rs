@@ -56,6 +56,9 @@ pub enum SecretStore {
 impl SecretStore {
     /// Connects to the Secret Service (≤ 2 s), else [`Self::Disabled`] with the reason.
     pub async fn detect() -> Self {
+        if cfg!(target_os = "macos") {
+            return Self::Disabled("stored passwords are not supported on macOS yet".to_owned());
+        }
         let connect = async {
             let service = Service::new().await?;
             service.default_collection().await

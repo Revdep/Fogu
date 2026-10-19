@@ -172,6 +172,8 @@ fn encode_legacy(k: &KeyInput, mode: TermMode, alt_is_meta: bool) -> Option<Vec<
 /// The Meta prefix is only added to a single character: prefixing multi-character text could
 /// build an arbitrary escape sequence (e.g. the bracketed-paste end marker).
 fn encode_char(c: char, text: Option<&str>, m: Mods, alt_is_meta: bool) -> Option<Vec<u8>> {
+    // macOS: `text` is Option's composed character (`ƒ`); as Meta the key itself is meant.
+    let text = text.filter(|_| !(cfg!(target_os = "macos") && m.alt && alt_is_meta));
     let body = if m.ctrl {
         match ctrl_byte(c) {
             Some(b) => vec![b],

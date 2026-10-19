@@ -283,9 +283,15 @@ fn strip_defaults_drops_values_equal_to_what_would_be_inherited() {
     let local = strip_defaults(&fixtures[2], &none);
     assert_eq!(local.icon, None);
     let text = toml::to_string(&local).unwrap();
+    // The fixture's `login = false` is the builtin default only off macOS.
+    let login = if crate::DEFAULT_LOGIN {
+        "login = false\n"
+    } else {
+        ""
+    };
     assert_eq!(
         text,
-        "id = \"l\"\nname = \"Local\"\ntype = \"local\"\nprogram = \"/bin/zsh\"\n"
+        format!("id = \"l\"\nname = \"Local\"\ntype = \"local\"\nprogram = \"/bin/zsh\"\n{login}")
     );
 }
 

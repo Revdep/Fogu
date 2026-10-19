@@ -287,9 +287,14 @@ fn resolve_local(opts: &LocalOpts, defaults: &LocalOpts) -> LocalProfile {
             .clone()
             .or_else(|| defaults.env.clone())
             .unwrap_or_default(),
-        login: opts.login.or(defaults.login).unwrap_or(false),
+        login: opts.login.or(defaults.login).unwrap_or(DEFAULT_LOGIN),
     }
 }
+
+/// Whether a local profile starts a login shell when neither it nor the defaults say. On macOS
+/// yes, like Terminal.app: a Finder-launched app gets launchd's bare environment, and zsh reads
+/// `.zprofile` (Homebrew `PATH`, locale) only as a login shell.
+pub const DEFAULT_LOGIN: bool = cfg!(target_os = "macos");
 
 /// The effective `terminal.osc52_write` for a profile: its own override, else the global default.
 #[must_use]
@@ -342,7 +347,11 @@ mod tests {
         else {
             panic!("expected a local profile");
         };
-        assert_eq!(effective, LocalProfile::default());
+        let builtin = LocalProfile {
+            login: DEFAULT_LOGIN,
+            ..LocalProfile::default()
+        };
+        assert_eq!(effective, builtin);
     }
 
     #[test]

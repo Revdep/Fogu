@@ -257,9 +257,16 @@ pub(crate) fn canonical_dir(path: &Path) -> Option<PathBuf> {
     canon.is_dir().then_some(canon)
 }
 
-/// This machine's hostname (`/proc/sys/kernel/hostname`), for [`is_local_host`]. Empty on
-/// failure, which only ever widens what counts as "local" by one fewer alias, never narrows it.
+/// This machine's hostname (`/proc/sys/kernel/hostname`, `uname` on macOS), for
+/// [`is_local_host`]. Empty on failure, which only ever widens what counts as "local" by one
+/// fewer alias, never narrows it.
 pub(crate) fn local_hostname() -> String {
+    if cfg!(target_os = "macos") {
+        return rustix::system::uname()
+            .nodename()
+            .to_string_lossy()
+            .into_owned();
+    }
     std::fs::read_to_string("/proc/sys/kernel/hostname")
         .map(|s| s.trim().to_owned())
         .unwrap_or_default()

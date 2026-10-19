@@ -513,15 +513,21 @@ impl Widget<Message, iced::Theme, iced::Renderer> for TerminalView<'_> {
         match event {
             _ if !self.focused => {}
             Event::Keyboard(keyboard::Event::KeyPressed {
+                key: plain_key,
                 modified_key,
                 location,
                 modifiers,
                 text,
                 ..
             }) => {
-                if let Some(key) =
-                    keys::key_input(modified_key, *location, *modifiers, text.as_deref())
-                {
+                let input = keys::key_input(modified_key, *location, *modifiers, text.as_deref());
+                if let Some(key) = input.map(|k| {
+                    if cfg!(target_os = "macos") {
+                        keys::macos_option(k, plain_key)
+                    } else {
+                        k
+                    }
+                }) {
                     shell.publish(Message::Key(key));
                     shell.capture_event();
                 }

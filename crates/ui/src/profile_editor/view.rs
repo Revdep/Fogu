@@ -318,7 +318,7 @@ fn local_sections<'a>(
         .cwd
         .as_ref()
         .map_or_else(|| "$HOME".to_owned(), |c| c.to_string_lossy().into_owned());
-    let login = local.login.or(d.login).unwrap_or(false);
+    let login = local.login.or(d.login).unwrap_or(fogu_core::DEFAULT_LOGIN);
     let command = vec![
         forms::text_field(
             look,

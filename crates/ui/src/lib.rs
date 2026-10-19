@@ -86,6 +86,7 @@ pub(crate) const UI_MEDIUM: iced::Font = iced::Font {
 };
 
 /// `WM_CLASS` / Wayland app id; matches the `.desktop` file's `StartupWMClass`.
+#[cfg(target_os = "linux")]
 const APP_ID: &str = "fogu";
 /// Window icon: `assets/fogu.png` at 64×64 as raw RGBA (`convert -resize 64x64 -depth 8
 /// rgba:…`), so no image decoder is needed.
@@ -105,13 +106,15 @@ pub fn run(config: Arc<Config>, options: RunOptions) -> Result {
         size: app::WINDOW_SIZE,
         icon: iced::window::icon::from_rgba(ICON_RGBA.to_vec(), ICON_SIZE, ICON_SIZE).ok(),
         platform_specific: iced::window::settings::PlatformSpecific {
+            #[cfg(target_os = "linux")]
             application_id: APP_ID.to_owned(),
             ..Default::default()
         },
         // `Message::CloseRequested` saves the session (tab recovery), then exits.
         exit_on_close_request: false,
-        // The tab bar is the title bar (move, maximize and window buttons, resize edges).
-        decorations: false,
+        // The tab bar is the title bar (move, maximize and window buttons, resize edges); macOS
+        // keeps its native title bar, as winit cannot resize an undecorated window there.
+        decorations: cfg!(target_os = "macos"),
         ..Default::default()
     };
     iced::application(

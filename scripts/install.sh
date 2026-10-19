@@ -11,6 +11,21 @@ bin_dir="$HOME/.local/bin"
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
 sizes=(48 128 256 512)
 
+# macOS: the binary only (no .desktop, no icon theme); BSD install has no -D, hence mkdir -p.
+if [[ "$(uname)" == Darwin ]]; then
+    if [[ "${1:-}" == "--uninstall" ]]; then
+        rm -f "$bin_dir/fogu"
+        echo "Fogu uninstalled from $bin_dir"
+        exit 0
+    fi
+    [[ "${FOGU_SKIP_BUILD:-}" == 1 ]] || cargo build --release --locked -p fogu
+    mkdir -p "$bin_dir"
+    install -m 755 target/release/fogu "$bin_dir/fogu"
+    echo "Installed Fogu to $bin_dir/fogu"
+    [[ ":$PATH:" == *":$bin_dir:"* ]] || echo "$bin_dir is not on PATH: add it, or run $bin_dir/fogu"
+    exit 0
+fi
+
 refresh_caches() {
     command -v update-desktop-database >/dev/null && update-desktop-database "$data_dir/applications" || true
     command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -qtf "$data_dir/icons/hicolor" || true
