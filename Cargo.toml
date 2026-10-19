@@ -72,9 +72,9 @@ toml = { version = "1.1.8", features = ["preserve_order"] }
 # round trip would drop them). Default features only (parse + display), pure Rust.
 toml_edit = "0.25.17"
 # why: `$XDG_CONFIG_HOME/fogu` path. Chose `xdg` over
-# `directories`: this is a Linux-only app, so `directories`' macOS/Windows path
-# logic is dead code we would carry for nothing; `xdg` is the smaller, Linux-specific crate for
-# exactly the XDG Base Directory spec we need.
+# `directories`: macOS keeps the same `~/.config/fogu` (dotfile-friendly, one documented path),
+# so `directories`' per-OS path logic is not needed; `xdg` is the smaller crate for exactly the
+# XDG Base Directory spec we need (it builds on any unix).
 xdg = "3.0.0"
 
 # why: the SSH client: pure Rust, tokio-native, actively maintained. `ring` backend instead of

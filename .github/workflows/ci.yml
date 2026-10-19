@@ -38,6 +38,23 @@ jobs:
           FOGU_REQUIRE_SSHD: "1"
       - run: cargo test --doc --workspace --locked
       - run: cargo deny check
+  # the macOS build: an ungated Linux-only call breaks here, not on a user's Mac
+  check-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      # FOGU_REQUIRE_SSHD unset: the SSH tests run where the runner's sshd starts, else skip
+      - run: cargo nextest run --workspace --locked --no-tests=pass
+      - run: cargo test --doc --workspace --locked
   fuzz-smoke:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-24.04

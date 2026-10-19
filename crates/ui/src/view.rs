@@ -287,7 +287,7 @@ impl App {
             iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
                 Some(Message::Drag(DragMsg::Release))
             }
-            // X11 only (winit 0.30); one event per file.
+            // X11 and macOS (winit 0.30 has no Wayland drops); one event per file.
             iced::Event::Window(window::Event::FileDropped(path)) => {
                 Some(Message::Desktop(sftp::DesktopMsg::Dropped(path)))
             }

@@ -5,13 +5,13 @@
 <h1 align="center">Fogu Terminal</h1>
 
 <p align="center">
-  <strong>A native Linux terminal with a built-in SSH manager and SFTP browser.</strong><br>
+  <strong>A native terminal for Linux and macOS with a built-in SSH manager and SFTP browser.</strong><br>
   Written in Rust. No browser engine, no compromises on your daily workflow.
 </p>
 
 <p align="center">
   <img alt="Status: beta" src="https://img.shields.io/badge/status-beta-yellow">
-  <img alt="Linux" src="https://img.shields.io/badge/platform-Linux-orange">
+  <img alt="Linux | macOS" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS-orange">
   <img alt="Rust" src="https://img.shields.io/badge/rust-1.99-orange">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-red">
   <img alt="unsafe: forbidden" src="https://img.shields.io/badge/unsafe-forbidden-red">
@@ -96,19 +96,37 @@ second and stays out of your way.
 
 ## Install
 
-Fogu runs on Linux (X11 and Wayland). Build from source with a Rust toolchain
+Fogu runs on Linux (X11 and Wayland) and macOS (Intel and Apple Silicon). Build from source with a Rust toolchain
 ([rustup](https://rustup.rs) picks the pinned version automatically):
 
 ```bash
 git clone https://github.com/Revdep/Fogu.git
 cd Fogu
-./scripts/install.sh              # release build, installs to ~/.local for the current user
+./scripts/install.sh              # release build, installs for the current user
 fogu
 ```
 
 `./scripts/install.sh --uninstall` removes exactly what was installed. No root needed.
 
 Build dependencies on Debian/Ubuntu: `sudo apt install build-essential pkg-config libudev-dev libxkbcommon-dev libwayland-dev`.
+
+### macOS
+
+The same script builds `~/Applications/Fogu.app` (open it from Finder, Launchpad or Spotlight)
+and puts `fogu` in `~/.local/bin`. It needs the Xcode command line tools
+(`xcode-select --install`). Good to know:
+
+- Fogu is not signed. A binary downloaded rather than built needs
+  `xattr -d com.apple.quarantine fogu` before it runs.
+- Option + a letter is Meta (`Option+f` moves a word forward); Option + any other key types its
+  character, so `@`, `#`, `[` and `~` work on layouts that need Option. With
+  `alt_is_meta = false` under `[terminal]`, Option only types characters. Dead keys
+  (Option+e and Option+u on a US layout) never reach the terminal.
+- Stored passwords and passphrases are not supported yet; Fogu asks each time.
+- `Cmd+Q` quits without the final session save: tabs come back, but up to the last 30 seconds
+  of scrollback may be missing.
+- Release builds turn core dumps off, but macOS has no equivalent of Linux's protection
+  against another process of yours attaching a debugger.
 
 ## Configuration
 
@@ -192,7 +210,7 @@ are skipped.
 Fogu is open to contributions: bug reports, ideas, documentation and code are all welcome.
 
 - **Bugs and ideas:** open an [issue](https://github.com/Revdep/Fogu/issues) with steps to
-  reproduce, your distribution and desktop (X11 or Wayland).
+  reproduce, your distribution and desktop (X11 or Wayland), or your macOS version.
 - **Code:** fork, branch, and open a pull request. Keep changes focused, add a test for new
   logic, and make sure `./scripts/check.sh` passes.
 - **Security issues:** please report them privately through

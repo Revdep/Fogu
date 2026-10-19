@@ -1,5 +1,5 @@
 //! The SFTP panel's touch points with the desktop: files dropped onto the window are uploaded
-//! into the panel's directory (X11 only: winit 0.30 has no Wayland drops), downloaded files are
+//! into the panel's directory (X11 and macOS: winit 0.30 has no Wayland drops), downloaded files are
 //! opened with `xdg-open` only when the user clicks "Open" / "Download and open" / "Show in
 //! file manager" (never automatically), and the file pickers are checked for
 //! before use (rfd opens nothing, silently, when neither the portal nor zenity exists).
