@@ -50,12 +50,26 @@ impl Display {
         })
     }
 
+    /// macOS (`XQuartz`): `$DISPLAY` is the socket path itself (`/private/tmp/…/org.xquartz:0`).
+    fn is_path(&self) -> bool {
+        cfg!(target_os = "macos") && self.host.starts_with('/')
+    }
+
     fn is_socket(&self) -> bool {
-        self.host.is_empty()
+        self.host.is_empty() || self.is_path()
     }
 
     fn is_local(&self) -> bool {
-        self.host.is_empty() || self.host == "localhost"
+        self.is_socket() || self.host == "localhost"
+    }
+
+    /// The Unix socket of a local display.
+    fn socket_path(&self) -> String {
+        if self.is_path() {
+            format!("{}:{}", self.host, self.number)
+        } else {
+            format!("/tmp/.X11-unix/X{}", self.number)
+        }
     }
 }
 
@@ -282,7 +296,7 @@ where
     };
     let display = &x11.display;
     let connected = if display.is_socket() {
-        let path = format!("/tmp/.X11-unix/X{}", display.number);
+        let path = display.socket_path();
         match tokio::time::timeout(CONNECT_TIMEOUT, UnixStream::connect(path)).await {
             Ok(Ok(mut local)) => send_and_pump(&mut channel, &mut local, &setup).await,
             Ok(Err(err)) => Err(err),

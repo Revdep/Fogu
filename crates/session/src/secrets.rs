@@ -1,5 +1,5 @@
-//! Stored passwords and key passphrases: the desktop Secret Service through `oo7`'s D-Bus client,
-//! never a file. [`SecretStore`] is the closed set of backends; [`Secrets`] is the one handle the
+//! Stored passwords and key passphrases: the desktop Secret Service through `oo7`'s D-Bus client
+//! (the login Keychain on macOS), never a file. [`SecretStore`] is the closed set of backends; [`Secrets`] is the one handle the
 //! session runtime owns: it connects on first use (so a profile that never stores anything never
 //! talks to the keyring) and runs every call on the session runtime, whichever executor awaits it.
 //!
@@ -46,6 +46,9 @@ impl SecretError {
 pub enum SecretStore {
     /// The user's default Secret Service collection (`gnome-keyring`, `KWallet`, `KeePassXC`…).
     SecretService(Collection),
+    /// The login Keychain (macOS): generic passwords under service `fogu`.
+    #[cfg(target_os = "macos")]
+    Keychain,
     /// No store; the text says why (shown to the user).
     Disabled(String),
     /// Tests only.
@@ -54,10 +57,11 @@ pub enum SecretStore {
 }
 
 impl SecretStore {
-    /// Connects to the Secret Service (≤ 2 s), else [`Self::Disabled`] with the reason.
+    /// The Keychain on macOS; elsewhere connects to the Secret Service (≤ 2 s), else
+    /// [`Self::Disabled`] with the reason.
     pub async fn detect() -> Self {
-        if cfg!(target_os = "macos") {
-            return Self::Disabled("stored passwords are not supported on macOS yet".to_owned());
+        if let Some(native) = native_store() {
+            return native;
         }
         let connect = async {
             let service = Service::new().await?;
@@ -95,6 +99,8 @@ impl SecretStore {
                     .map_err(|_| SecretError::new("the stored secret is not text"))?;
                 Ok(Some(SecretString::from(text)))
             }
+            #[cfg(target_os = "macos")]
+            Self::Keychain => keychain::get(key).await,
             Self::Disabled(reason) => Err(SecretError::new(reason)),
             #[cfg(any(test, feature = "test-store"))]
             Self::InMemory(map) => Ok(map.lock().ok().and_then(|m| m.get(&id(key)).cloned())),
@@ -105,6 +111,8 @@ impl SecretStore {
     pub async fn exists(&self, key: &SecretKey) -> Result<bool, SecretError> {
         match self {
             Self::SecretService(collection) => Ok(!find(collection, key).await?.is_empty()),
+            #[cfg(target_os = "macos")]
+            Self::Keychain => Ok(keychain::get(key).await?.is_some()),
             Self::Disabled(reason) => Err(SecretError::new(reason)),
             #[cfg(any(test, feature = "test-store"))]
             Self::InMemory(map) => Ok(map.lock().is_ok_and(|m| m.contains_key(&id(key)))),
@@ -127,6 +135,8 @@ impl SecretStore {
                 .await?;
                 Ok(())
             }
+            #[cfg(target_os = "macos")]
+            Self::Keychain => keychain::set(key, value).await,
             Self::Disabled(reason) => Err(SecretError::new(reason)),
             #[cfg(any(test, feature = "test-store"))]
             Self::InMemory(map) => {
@@ -147,6 +157,8 @@ impl SecretStore {
                 }
                 Ok(())
             }
+            #[cfg(target_os = "macos")]
+            Self::Keychain => keychain::delete(key).await,
             Self::Disabled(reason) => Err(SecretError::new(reason)),
             #[cfg(any(test, feature = "test-store"))]
             Self::InMemory(map) => {
@@ -156,6 +168,87 @@ impl SecretStore {
                 Ok(())
             }
         }
+    }
+}
+
+/// The platform's own store, used instead of the Secret Service: the Keychain on macOS.
+#[cfg(target_os = "macos")]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "same signature as the other platforms' `None`"
+)]
+const fn native_store() -> Option<SecretStore> {
+    Some(SecretStore::Keychain)
+}
+
+#[cfg(not(target_os = "macos"))]
+const fn native_store() -> Option<SecretStore> {
+    None
+}
+
+/// The login Keychain through Security.framework's generic passwords.
+#[cfg(target_os = "macos")]
+mod keychain {
+    use fogu_core::SecretKey;
+    use secrecy::{ExposeSecret as _, SecretString};
+    use security_framework::passwords::{self, PasswordOptions};
+
+    use super::SecretError;
+
+    const SERVICE: &str = "fogu";
+    /// `errSecItemNotFound`.
+    const NOT_FOUND: i32 = -25_300;
+
+    /// The item's account: the key's lookup attributes as JSON, which is deterministic (sorted
+    /// map) and injective (escaped), unlike joining `k=v` pairs of unrestricted strings.
+    pub(super) fn account(key: &SecretKey) -> String {
+        serde_json::to_string(&key.attributes()).unwrap_or_default()
+    }
+
+    /// Runs a Security.framework call off the runtime: it blocks, and an access dialog waits
+    /// for the user.
+    async fn blocking<T: Send + 'static>(
+        call: impl FnOnce() -> Result<T, SecretError> + Send + 'static,
+    ) -> Result<T, SecretError> {
+        tokio::task::spawn_blocking(call)
+            .await
+            .unwrap_or_else(|_| Err(SecretError::new("the Keychain call failed")))
+    }
+
+    pub(super) async fn get(key: &SecretKey) -> Result<Option<SecretString>, SecretError> {
+        let account = account(key);
+        blocking(
+            move || match passwords::get_generic_password(SERVICE, &account) {
+                Ok(bytes) => String::from_utf8(bytes)
+                    .map(|text| Some(SecretString::from(text)))
+                    .map_err(|_| SecretError::new("the stored secret is not text")),
+                Err(err) if err.code() == NOT_FOUND => Ok(None),
+                Err(err) => Err(SecretError::new(err)),
+            },
+        )
+        .await
+    }
+
+    pub(super) async fn set(key: &SecretKey, value: &SecretString) -> Result<(), SecretError> {
+        let (account, label, value) = (account(key), key.label(), value.clone());
+        blocking(move || {
+            let mut options = PasswordOptions::new_generic_password(SERVICE, &account);
+            options.set_label(&label);
+            passwords::set_generic_password_options(value.expose_secret().as_bytes(), options)
+                .map_err(SecretError::new)
+        })
+        .await
+    }
+
+    pub(super) async fn delete(key: &SecretKey) -> Result<(), SecretError> {
+        let account = account(key);
+        blocking(
+            move || match passwords::delete_generic_password(SERVICE, &account) {
+                Err(err) if err.code() != NOT_FOUND => Err(SecretError::new(err)),
+                _ => Ok(()),
+            },
+        )
+        .await
     }
 }
 
@@ -335,6 +428,47 @@ mod tests {
         assert!(!format!("{secrets:?}").contains("hunter2"));
         let got = secrets.get(&key("a")).await.unwrap();
         assert!(!format!("{got:?}").contains("hunter2"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn keychain_accounts_are_distinct_for_tricky_names() {
+        let script = |profile: &str, name: &str| SecretKey::LoginScript {
+            profile_id: fogu_core::ProfileId(profile.into()),
+            name: name.into(),
+        };
+        let a = keychain::account(&script("p;name=x", "y"));
+        let b = keychain::account(&script("p", "x;name=y"));
+        let c = keychain::account(&script("p\"", "y"));
+        assert_ne!(a, b);
+        assert_ne!(a, c);
+        assert_eq!(a, keychain::account(&script("p;name=x", "y")));
+        assert!(a.contains("\"application\":\"fogu\""));
+    }
+
+    /// Against the user's login Keychain; needs `FOGU_TEST_KEYCHAIN=1`.
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn live_keychain_round_trip() {
+        if std::env::var_os("FOGU_TEST_KEYCHAIN").is_none() {
+            return;
+        }
+        let store = SecretStore::detect().await;
+        assert!(matches!(store, SecretStore::Keychain), "{store:?}");
+        let key = SecretKey::KeyPassphrase {
+            key_fingerprint: "fogu-test-live-item".into(),
+        };
+        store.delete(&key).await.unwrap();
+        assert!(!store.exists(&key).await.unwrap());
+        store.set(&key, &SecretString::from("first")).await.unwrap();
+        store
+            .set(&key, &SecretString::from("päss wörd"))
+            .await
+            .unwrap();
+        let got = store.get(&key).await.unwrap().unwrap();
+        assert_eq!(got.expose_secret(), "päss wörd");
+        store.delete(&key).await.unwrap();
+        assert!(store.get(&key).await.unwrap().is_none());
     }
 
     /// Against the real Secret Service of the session bus; needs `FOGU_TEST_SECRET_SERVICE=1`

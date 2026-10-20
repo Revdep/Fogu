@@ -100,6 +100,8 @@ secrecy = "0.10.3"
 # openssl, banned in deny.toml); `tokio` = zbus on the session runtime. No file/portal backend is
 # used: we talk to the `dbus` module only, so a missing service never falls back to a file.
 oo7 = { version = "0.6.0", default-features = false, features = ["tokio", "native_crypto"] }
+# why: macOS only: stored passwords in the login Keychain (generic passwords, safe API).
+security-framework = "3.7.0"
 
 # why: native file pickers for SFTP upload/download.
 # Only the `xdg-portal` backend (D-Bus portal, zenity fallback): no GTK, no `wayland` feature (the

@@ -23,12 +23,24 @@ tokio-util = { workspace = true, optional = true }
 secrecy.workspace = true
 oo7 = { workspace = true, optional = true }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
 [features]
 default = ["ssh"]
 # The SSH transport (`run_ssh`). Off = local shells only, no russh in the tree.
 # Tests only: `SecretStore::InMemory` for the integration tests.
 test-store = []
-ssh = ["dep:russh", "dep:ring", "dep:russh-sftp", "dep:tokio-util", "dep:oo7"]
+ssh = [
+    "dep:russh",
+    "dep:ring",
+    "dep:russh-sftp",
+    "dep:tokio-util",
+    "dep:oo7",
+    "dep:security-framework",
+    "dep:serde_json",
+]
 
 [[example]]
 name = "ssh_probe"

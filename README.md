@@ -83,7 +83,8 @@ second and stays out of your way.
 - Port forwarding: local, remote and dynamic (SOCKS5), managed live from a dialog
 - Agent and X11 forwarding (off by default, clearly flagged when on)
 - Connection reuse: tabs, splits and SFTP for the same host share one SSH connection
-- Passwords and key passphrases stored in the desktop keyring (Secret Service), never on disk
+- Passwords and key passphrases stored in the desktop keyring (Secret Service, or the Keychain
+  on macOS), never on disk
 - Login scripts, starting directory, remembered directory, automatic reconnect with backoff
 
 ### SFTP browser
@@ -122,7 +123,8 @@ and puts `fogu` in `~/.local/bin`. It needs the Xcode command line tools
   character, so `@`, `#`, `[` and `~` work on layouts that need Option. With
   `alt_is_meta = false` under `[terminal]`, Option only types characters. Dead keys
   (Option+e and Option+u on a US layout) never reach the terminal.
-- Stored passwords and passphrases are not supported yet; Fogu asks each time.
+- Stored passwords and passphrases go to the login Keychain (service `fogu` in Keychain
+  Access). After a rebuild macOS may ask once to let the new binary read them.
 - `Cmd+Q` quits without the final session save: tabs come back, but up to the last 30 seconds
   of scrollback may be missing.
 - Release builds turn core dumps off, but macOS has no equivalent of Linux's protection

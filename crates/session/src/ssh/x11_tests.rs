@@ -165,3 +165,23 @@ fn fake_cookie_hex_is_32_lowercase_digits() {
     };
     assert_eq!(x11.fake_hex(), "ab".repeat(16));
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn xquartz_display_is_its_socket_and_gets_the_local_cookie() {
+    let text = "/private/tmp/com.apple.launchd.AbC/org.xquartz:0";
+    let display = Display::parse(text).unwrap();
+    assert!(display.is_socket() && display.is_local());
+    assert_eq!(display.socket_path(), text);
+    let file = [
+        record(FAMILY_LOCAL, b"other", "0", MIT_COOKIE, b"wrong"),
+        record(FAMILY_LOCAL, b"mac", "0", MIT_COOKIE, b"right"),
+    ]
+    .concat();
+    let cookie = find_cookie(&parse_xauthority(&file), &display, "mac");
+    assert_eq!(cookie.as_deref(), Some(&b"right"[..]));
+    assert_eq!(
+        Display::parse(":1").unwrap().socket_path(),
+        "/tmp/.X11-unix/X1"
+    );
+}

@@ -46,19 +46,56 @@ fn current_cwd(master: &OwnedFd, shell_pid: Option<u32>) -> Option<PathBuf> {
         .ok()
         .and_then(|pgid| u32::try_from(pgid.as_raw_nonzero().get()).ok());
     fg_pid.into_iter().chain(shell_pid).find_map(|pid| {
-        let cwd = std::fs::read_link(format!("/proc/{pid}/cwd")).ok()?;
+        let cwd = if cfg!(target_os = "macos") {
+            macos_cwd(pid)?
+        } else {
+            std::fs::read_link(format!("/proc/{pid}/cwd")).ok()?
+        };
         canonical_dir(&cwd)
     })
 }
 
-/// The program in front of the shell (`/proc/<pgid>/comm`), `None` when the shell itself is.
+/// macOS has no `/proc`: `lsof` names the cwd (the `n<path>` line of `-Fn`).
+/// shortcut: spawns lsof (~0.2 s) on the session task; only on demand ("new tab here").
+fn macos_cwd(pid: u32) -> Option<PathBuf> {
+    use std::os::unix::ffi::OsStrExt as _;
+    let out = std::process::Command::new("/usr/sbin/lsof")
+        .args(["-a", "-d", "cwd", "-Fn", "-p", &pid.to_string()])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    let line = out
+        .stdout
+        .split(|b| *b == b'\n')
+        .find_map(|l| l.strip_prefix(b"n"))?;
+    Some(PathBuf::from(std::ffi::OsStr::from_bytes(line)))
+}
+
+/// macOS: the program's name from `ps` (it prints the path, the name is its last part).
+fn macos_comm(pid: u32) -> Option<String> {
+    let out = std::process::Command::new("/bin/ps")
+        .args(["-o", "comm=", "-p", &pid.to_string()])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    let path = String::from_utf8(out.stdout).ok()?;
+    let name = path.trim().rsplit('/').next()?;
+    Some(name.to_owned())
+}
+
+/// The program in front of the shell (`/proc/<pgid>/comm`, `ps` on macOS), `None` when the shell
+/// itself is.
 fn foreground(master: &OwnedFd, shell_pid: Option<u32>) -> Option<String> {
     let group = rustix::termios::tcgetpgrp(master).ok()?;
     let pid = u32::try_from(group.as_raw_nonzero().get()).ok()?;
     if Some(pid) == shell_pid {
         return None;
     }
-    let name = std::fs::read_to_string(format!("/proc/{pid}/comm")).ok()?;
+    let name = if cfg!(target_os = "macos") {
+        macos_comm(pid)?
+    } else {
+        std::fs::read_to_string(format!("/proc/{pid}/comm")).ok()?
+    };
     let name = crate::sanitize_remote(name.trim(), 64, false);
     (!name.is_empty()).then_some(name)
 }
@@ -329,6 +366,27 @@ fn login_argv0(program: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_cwd_and_program_of_a_live_process() {
+        let dir = std::env::temp_dir().canonicalize().unwrap_or_default();
+        let mut child = std::process::Command::new("/bin/sleep")
+            .arg("5")
+            .current_dir(&dir)
+            .spawn()
+            .ok();
+        let pid = child.as_ref().map_or(0, std::process::Child::id);
+        let cwd = macos_cwd(pid).and_then(|p| p.canonicalize().ok());
+        let name = macos_comm(pid);
+        if let Some(child) = child.as_mut() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        assert_eq!(cwd, Some(dir));
+        assert_eq!(name.as_deref(), Some("sleep"));
+        assert_eq!(macos_cwd(u32::MAX), None, "no such process");
+    }
 
     #[test]
     fn passwd_lookup_by_uid() {
