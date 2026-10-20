@@ -85,7 +85,9 @@ const TABLE: &[Row] = &[
     row("text missing uses key", Char('x'), None, N, NORMAL, true, Some(b"x")),
     row("text control chars dropped", Char('x'), Some("\x1b"), N, NORMAL, true, Some(b"x")),
     row("text space", Char(' '), Some(" "), N, NORMAL, true, Some(b" ")),
-    row("text logo passes", Char('a'), Some("a"), L, NORMAL, true, Some(b"a")),
+    // macOS: an unbound Cmd chord (Cmd-N, Cmd-S…) is an app shortcut, never text.
+    row("text logo", Char('a'), Some("a"), L, NORMAL, true, if cfg!(target_os = "macos") { None } else { Some(b"a") }),
+    row("text logo kitty", Char('a'), Some("a"), L, KITTY1, true, Some(b"\x1b[97;9u")),
     // Alt as meta.
     row("alt b meta", Char('b'), Some("b"), A, NORMAL, true, Some(b"\x1bb")),
     row("alt f meta", Char('f'), Some("f"), A, NORMAL, true, Some(b"\x1bf")),

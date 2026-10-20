@@ -168,10 +168,25 @@ const LAUNCHABLE: &[&str] = &[
     "plasmoid",
 ];
 
-/// macOS: `open` also runs these; `.app`/`.workflow` are bundles (directories), so refused
-/// whatever their type.
+/// macOS: `open` also runs or installs these, or (`fileloc`, `inetloc`, `webloc`) opens what
+/// they point at; `.app`/`.workflow` are bundles (directories), so refused whatever their type.
 const LAUNCHABLE_MACOS: &[&str] = &[
-    "app", "pkg", "mpkg", "dmg", "command", "tool", "terminal", "workflow", "scpt",
+    "app",
+    "pkg",
+    "mpkg",
+    "dmg",
+    "command",
+    "tool",
+    "terminal",
+    "workflow",
+    "scpt",
+    "fileloc",
+    "inetloc",
+    "webloc",
+    "prefpane",
+    "saver",
+    "mobileconfig",
+    "shortcut",
 ];
 
 /// `xdg-open`, or `open` on macOS.
@@ -305,7 +320,22 @@ mod tests {
         std::fs::create_dir_all(&app).unwrap();
         let dmg = dir.join("setup.DMG");
         std::fs::write(&dmg, "x").unwrap();
-        for path in [&app, &dmg] {
+        let mut paths = vec![app, dmg];
+        // Bundles `open` installs, and files that point it at something to run.
+        for name in [
+            "x.fileloc",
+            "x.inetloc",
+            "x.webloc",
+            "x.prefPane",
+            "x.saver",
+            "x.mobileconfig",
+            "x.shortcut",
+        ] {
+            let path = dir.join(name);
+            std::fs::write(&path, "x").unwrap();
+            paths.push(path);
+        }
+        for path in &paths {
             assert_eq!(
                 refuse_open(path).is_err(),
                 cfg!(target_os = "macos"),

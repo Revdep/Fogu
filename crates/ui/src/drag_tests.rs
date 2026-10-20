@@ -187,3 +187,25 @@ fn resize_hotkeys_move_the_divider_by_the_configured_step() {
     let left = rects.iter().find(|(id, _)| *id == a).unwrap().1;
     assert!((left.w - 60.0).abs() < 0.5, "{left:?}");
 }
+
+/// Full screen entered outside the action (macOS's green button) is reported as a window mode:
+/// the bar drops the traffic-light room, and the action then leaves full screen.
+#[test]
+fn reported_window_mode_drives_the_fullscreen_state() {
+    let mut app = app();
+    let _ = app.update(Message::WindowMode(iced::window::Mode::Fullscreen));
+    assert!(app.fullscreen);
+    assert!(app.bar_inset().abs() < f32::EPSILON);
+    let _ = app.update(Message::Action(Action::ToggleFullscreen));
+    assert!(!app.fullscreen, "the action leaves full screen");
+    // The report after the exit animation settles brings the traffic-light room back.
+    let _ = app.update(Message::WindowMode(iced::window::Mode::Fullscreen));
+    let _ = app.update(Message::WindowMode(iced::window::Mode::Windowed));
+    assert!(!app.fullscreen);
+    let room = if cfg!(target_os = "macos") {
+        crate::tab_bar::TRAFFIC_LIGHTS_W
+    } else {
+        0.0
+    };
+    assert!((app.bar_inset() - room).abs() < f32::EPSILON);
+}

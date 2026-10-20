@@ -21,6 +21,9 @@ ring = { workspace = true, optional = true }
 russh-sftp = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
 secrecy.workspace = true
+
+# The Secret Service (D-Bus); macOS uses the Keychain below.
+[target.'cfg(not(target_os = "macos"))'.dependencies]
 oo7 = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]

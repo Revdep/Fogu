@@ -138,6 +138,39 @@ fn close_falls_back_to_sigkill_after_the_grace_period() {
     );
 }
 
+/// macOS: an app started from Finder or the Dock gets no locale from launchd; like Terminal.app,
+/// the shell then gets `LANG` from the system language (else UTF-8 input and names break).
+#[cfg(target_os = "macos")]
+#[test]
+fn build_env_gives_a_locale_when_the_app_has_none() {
+    let none = BTreeMap::new();
+    let lang = |parent: &[(&str, &str)], profile: &BTreeMap<String, String>| {
+        let parent = parent
+            .iter()
+            .map(|(k, v)| (OsString::from(k), OsString::from(v)));
+        build_env(parent, profile)
+            .get(&OsString::from("LANG"))
+            .map(|v| v.to_str().unwrap().to_owned())
+    };
+    let given = lang(&[("PATH", "/usr/bin")], &none).unwrap();
+    assert!(given.ends_with(".UTF-8"), "{given}");
+    assert!(
+        std::path::Path::new("/usr/share/locale")
+            .join(&given)
+            .is_dir(),
+        "{given}"
+    );
+    // Anything the user already chose stays as it is.
+    assert_eq!(
+        lang(&[("LANG", "fr_FR.UTF-8")], &none).as_deref(),
+        Some("fr_FR.UTF-8")
+    );
+    assert_eq!(lang(&[("LC_ALL", "de_DE.UTF-8")], &none), None);
+    assert_eq!(lang(&[("LC_CTYPE", "UTF-8")], &none), None);
+    let profile = BTreeMap::from([("LANG".to_owned(), "C".to_owned())]);
+    assert_eq!(lang(&[], &profile).as_deref(), Some("C"));
+}
+
 #[test]
 fn build_env_removes_sets_and_expands() {
     let parent: Vec<(OsString, OsString)> = [

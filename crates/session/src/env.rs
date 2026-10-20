@@ -44,12 +44,51 @@ where
     ] {
         env.insert(key.into(), value.into());
     }
+    if cfg!(target_os = "macos") && !LOCALE_VARS.iter().any(|k| env.contains_key(OsStr::new(k))) {
+        env.insert("LANG".into(), system_lang().into());
+    }
     let expanded: Vec<(OsString, OsString)> = profile_env
         .iter()
         .map(|(key, value)| (key.into(), expand(value, &env).into()))
         .collect();
     env.extend(expanded);
     env
+}
+
+/// Set by the user (any one is enough): then no `LANG` is added on macOS.
+const LOCALE_VARS: &[&str] = &["LANG", "LC_ALL", "LC_CTYPE"];
+
+/// macOS: `LANG` from the system language, as Terminal.app does (launchd gives an app started
+/// from Finder no locale). Looked up once per run.
+/// shortcut: runs `defaults` (~30 ms) on the first local shell; reading the preferences plist
+/// directly needs a plist parser.
+fn system_lang() -> &'static str {
+    static LANG: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    LANG.get_or_init(|| {
+        let locale = std::process::Command::new("/usr/bin/defaults")
+            .args(["read", "-g", "AppleLocale"])
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()
+            .and_then(|out| String::from_utf8(out.stdout).ok());
+        lang_for(locale.as_deref(), |name| {
+            std::path::Path::new("/usr/share/locale")
+                .join(name)
+                .is_dir()
+        })
+    })
+}
+
+/// `<locale>.UTF-8` for an `AppleLocale` value (`en_US@rg=itzzzz` gives `en_US.UTF-8`), else
+/// `en_US.UTF-8` when that locale is not `installed` (`en_IT`).
+fn lang_for(apple_locale: Option<&str>, installed: impl Fn(&str) -> bool) -> String {
+    apple_locale
+        .and_then(|l| l.trim().split('@').next())
+        .filter(|l| !l.is_empty())
+        .map(|l| format!("{l}.UTF-8"))
+        .filter(|l| installed(l))
+        .unwrap_or_else(|| "en_US.UTF-8".to_owned())
 }
 
 /// Replaces every `${NAME}` in `value` with `NAME` from `env`; an unterminated `${` is literal.
@@ -71,4 +110,19 @@ fn expand(value: &str, env: &BTreeMap<OsString, OsString>) -> String {
     }
     out.push_str(rest);
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lang_follows_the_system_locale_if_installed() {
+        let installed = |l: &str| ["it_IT.UTF-8", "en_US.UTF-8"].contains(&l);
+        assert_eq!(lang_for(Some("it_IT\n"), installed), "it_IT.UTF-8");
+        assert_eq!(lang_for(Some("en_US@rg=itzzzz"), installed), "en_US.UTF-8");
+        assert_eq!(lang_for(Some("en_IT"), installed), "en_US.UTF-8");
+        assert_eq!(lang_for(Some(""), installed), "en_US.UTF-8");
+        assert_eq!(lang_for(None, installed), "en_US.UTF-8");
+    }
 }

@@ -410,6 +410,22 @@ mod tests {
         );
     }
 
+    /// macOS shows Alt and Meta as `Option-` and `Cmd-` (what the keyboard says); both
+    /// spellings parse everywhere, so a config written on one OS loads on the other.
+    #[test]
+    fn display_names_the_platform_modifiers() {
+        let chord = KeyChord::parse("Meta-Alt-Left").unwrap();
+        let want = if cfg!(target_os = "macos") {
+            "Option-Cmd-Left"
+        } else {
+            "Alt-Meta-Left"
+        };
+        assert_eq!(chord.to_string(), want);
+        for spelling in ["Option-Cmd-Left", "Alt-Meta-Left", "opt-command-left"] {
+            assert_eq!(KeyChord::parse(spelling).unwrap(), chord, "{spelling}");
+        }
+    }
+
     #[test]
     fn serde_round_trips_through_toml() {
         #[derive(Serialize, Deserialize)]

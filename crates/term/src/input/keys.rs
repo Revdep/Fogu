@@ -128,6 +128,8 @@ fn encode_legacy(k: &KeyInput, mode: TermMode, alt_is_meta: bool) -> Option<Vec<
         out
     };
     let out = match k.key {
+        // macOS: an unbound Cmd chord is an app shortcut; legacy encoding would type the letter.
+        KeyCode::Char(_) if cfg!(target_os = "macos") && m.logo => return None,
         KeyCode::Char(c) => return encode_char(c, k.text.as_deref(), m, alt_is_meta),
         KeyCode::NumpadEnter if mode.contains(TermMode::APP_KEYPAD) => ss3_or_csi(b'M', m),
         KeyCode::Enter | KeyCode::NumpadEnter => meta(newline(mode)),

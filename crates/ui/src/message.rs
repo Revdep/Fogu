@@ -65,6 +65,11 @@ pub enum Message {
     ScaleFactor(f32),
     /// The window's new logical size (keeps context menus inside it).
     WindowResized(iced::Size),
+    /// The window's mode, queried after a resize on macOS (full screen can start from the green
+    /// button, not only from the action).
+    WindowMode(iced::window::Mode),
+    /// Ask for [`Message::WindowMode`] (after a full-screen animation settled).
+    QueryWindowMode,
     /// Window focus gained or lost.
     Focused(bool),
     /// A click into pane `.0`: focus it (and the window's terminal area).

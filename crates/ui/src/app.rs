@@ -368,8 +368,10 @@ impl App {
                 self.apply_metrics();
                 Task::none()
             }
-            Message::WindowResized(size) => {
-                self.window_size = size;
+            Message::WindowResized(size) => self.on_window_resized(size),
+            Message::QueryWindowMode => query_window_mode(),
+            Message::WindowMode(mode) => {
+                self.fullscreen = mode == window::Mode::Fullscreen;
                 Task::none()
             }
             Message::Focused(focused) => {
@@ -451,6 +453,19 @@ impl App {
         Task::none()
     }
 
+    /// Keeps the size; on macOS also asks for the mode, as the green button enters full screen
+    /// without the action.
+    fn on_window_resized(&mut self, size: iced::Size) -> Task<Message> {
+        self.window_size = size;
+        if cfg!(target_os = "macos") {
+            // Again once the animation is over: leaving full screen, winit clears its state only
+            // after the last resize of the animation.
+            let settled = self.after(FULLSCREEN_SETTLE, Message::QueryWindowMode);
+            return Task::batch([query_window_mode(), settled]);
+        }
+        Task::none()
+    }
+
     /// Window focus, or a click into a pane (which also commits an inline rename).
     pub(crate) fn on_focused(&mut self, focused: bool) {
         if focused && self.renaming.is_some() {
@@ -525,4 +540,14 @@ impl App {
             .spawn(async move { tokio::time::sleep(delay).await });
         Task::perform(timer, move |_| message.clone())
     }
+}
+
+/// How long macOS's full-screen animation may take.
+const FULLSCREEN_SETTLE: Duration = Duration::from_secs(1);
+
+/// The window's mode as [`Message::WindowMode`].
+fn query_window_mode() -> Task<Message> {
+    window::oldest()
+        .and_then(window::mode)
+        .map(Message::WindowMode)
 }

@@ -68,12 +68,14 @@ fn make_undumpable() -> rustix::io::Result<()> {
 
 #[cfg(not(target_os = "linux"))]
 fn make_undumpable() -> rustix::io::Result<()> {
-    use rustix::process::{Resource, Rlimit, setrlimit};
+    use rustix::process::{Resource, Rlimit, getrlimit, setrlimit};
+    // The soft limit only: child shells inherit it and may raise it again.
+    let maximum = getrlimit(Resource::Core).maximum;
     setrlimit(
         Resource::Core,
         Rlimit {
             current: Some(0),
-            maximum: Some(0),
+            maximum,
         },
     )
 }
@@ -153,4 +155,20 @@ fn state_dir() -> Result<PathBuf, String> {
     let dir = state.join("fogu");
     fsutil::ensure_private_dir(&dir).map_err(|err| format!("{}: {err}", dir.display()))?;
     Ok(dir)
+}
+
+#[cfg(test)]
+mod tests {
+    /// Core dumps off for Fogu, but only the soft limit: shells started in Fogu inherit it and
+    /// can still raise it (`ulimit -c unlimited`), as in any other terminal.
+    #[cfg(not(target_os = "linux"))]
+    #[test]
+    fn undumpable_leaves_the_hard_core_limit_alone() {
+        use rustix::process::{Resource, getrlimit};
+        let before = getrlimit(Resource::Core).maximum;
+        assert!(super::make_undumpable().is_ok());
+        let after = getrlimit(Resource::Core);
+        assert_eq!(after.current, Some(0));
+        assert_eq!(after.maximum, before);
+    }
 }

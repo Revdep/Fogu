@@ -7,8 +7,8 @@
 //! `/etc/shadow` and are covered by [`super::fake_server`] instead). The daemon's whole process
 //! group is killed on drop, so a panicking test leaves nothing behind.
 //!
-//! Missing binaries are a *skip*: a clear line on stderr and `None`. With
-//! `FOGU_REQUIRE_SSHD=1` (CI) a skip is a failure instead.
+//! Missing binaries, or an `sshd` that will not start, are a *skip*: a clear line on stderr and
+//! `None`. With `FOGU_REQUIRE_SSHD=1` (CI) a skip is a failure instead.
 
 use std::fmt::Write as _;
 use std::fs;
@@ -183,10 +183,13 @@ impl TestSshd {
                 Err(why) => eprintln!("sshd start attempt {attempt} on port {port} failed: {why}"),
             }
         }
-        panic!(
+        // A skip (a failure under `FOGU_REQUIRE_SSHD`): some hosts, e.g. macOS CI runners, have
+        // an `sshd` that will not run unprivileged.
+        skip(&format!(
             "sshd did not start; log:\n{}",
             fs::read_to_string(dir.join("sshd.log")).unwrap_or_default()
-        );
+        ));
+        None
     }
 
     /// A profile for this daemon: key auth with [`Self::client_key`], nothing else configured.

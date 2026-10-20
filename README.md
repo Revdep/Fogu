@@ -121,13 +121,18 @@ and puts `fogu` in `~/.local/bin`. It needs the Xcode command line tools
   `xattr -d com.apple.quarantine fogu` before it runs.
 - Option + a letter is Meta (`Option+f` moves a word forward); Option + any other key types its
   character, so `@`, `#`, `[` and `~` work on layouts that need Option. With
-  `alt_is_meta = false` under `[terminal]`, Option only types characters. Dead keys
+  `alt_is_meta = false` under `[terminal]`, Option only types characters: layouts that put
+  characters on Option + a letter need it (German: `@` is Option+L, `~` is Option+N). Dead keys
   (Option+e and Option+u on a US layout) never reach the terminal.
+- `Cmd` + a key that is not a Fogu shortcut does nothing, as in Terminal.app (apps that turn on
+  the kitty keyboard protocol still receive it).
+- Local shells get `LANG` from the system language (for example `it_IT.UTF-8`) when Fogu was
+  started without any locale variable, as it is from Finder or the Dock.
 - Stored passwords and passphrases go to the login Keychain (service `fogu` in Keychain
   Access). After a rebuild macOS may ask once to let the new binary read them.
 - `Cmd+Q` quits without the final session save: tabs come back, but up to the last 30 seconds
   of scrollback may be missing.
-- Release builds turn core dumps off, but macOS has no equivalent of Linux's protection
+- Release builds turn core dumps off for Fogu (the soft limit, so shells can raise it again), but macOS has no equivalent of Linux's protection
   against another process of yours attaching a debugger.
 
 ## Configuration
@@ -163,8 +168,8 @@ Hosts from `~/.ssh/config` appear in the sidebar automatically.
 | Zoom | `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | `Cmd+=` / `Cmd+-` / `Cmd+0` |
 | Full screen | `F11` | `Ctrl+Cmd+F` |
 
-Every action can be rebound under `[hotkeys]`; on macOS `Cmd` and `Option` are accepted as
-modifier names.
+Every action can be rebound under `[hotkeys]`. `Cmd` and `Option` are accepted as modifier
+names on every system (the same keys as `Meta` and `Alt`); macOS shows them that way.
 
 ### Command line
 

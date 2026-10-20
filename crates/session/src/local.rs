@@ -41,58 +41,89 @@ enum End {
 
 /// On-demand cwd lookup (fallback when the shell reports no OSC 7): the foreground process group's
 /// directory, falling back to the shell's own. `None` if neither resolves to a live directory.
-fn current_cwd(master: &OwnedFd, shell_pid: Option<u32>) -> Option<PathBuf> {
+async fn current_cwd(master: &OwnedFd, shell_pid: Option<u32>) -> Option<PathBuf> {
     let fg_pid = rustix::termios::tcgetpgrp(master)
         .ok()
         .and_then(|pgid| u32::try_from(pgid.as_raw_nonzero().get()).ok());
-    fg_pid.into_iter().chain(shell_pid).find_map(|pid| {
+    for pid in fg_pid.into_iter().chain(shell_pid) {
         let cwd = if cfg!(target_os = "macos") {
-            macos_cwd(pid)?
+            macos_cwd(pid).await
         } else {
-            std::fs::read_link(format!("/proc/{pid}/cwd")).ok()?
+            std::fs::read_link(format!("/proc/{pid}/cwd")).ok()
         };
-        canonical_dir(&cwd)
-    })
+        if let Some(dir) = cwd.as_deref().and_then(canonical_dir) {
+            return Some(dir);
+        }
+    }
+    None
+}
+
+/// How long `lsof` / `ps` may take before the lookup gives up (the session's I/O waits on it).
+const LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// `command`'s stdout, `None` if it fails to start or outlives `limit` (then it is killed).
+async fn output_within(limit: Duration, command: &mut tokio::process::Command) -> Option<Vec<u8>> {
+    // A UTF-8 locale: without one (started from Finder) `lsof` prints `è` as `\xc3\xa8` and
+    // `ps` as `M-CM-(`.
+    let running = command
+        .env_remove("LC_ALL")
+        .env("LC_CTYPE", "UTF-8")
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true)
+        .output();
+    let out = tokio::time::timeout(limit, running).await.ok()?.ok()?;
+    Some(out.stdout)
 }
 
 /// macOS has no `/proc`: `lsof` names the cwd (the `n<path>` line of `-Fn`).
-/// shortcut: spawns lsof (~0.2 s) on the session task; only on demand ("new tab here").
-fn macos_cwd(pid: u32) -> Option<PathBuf> {
+/// shortcut: spawns lsof (~0.2 s, the session's I/O waits meanwhile); only on demand ("new tab
+/// here"). `libproc` answers in microseconds if it ever matters.
+async fn macos_cwd(pid: u32) -> Option<PathBuf> {
     use std::os::unix::ffi::OsStrExt as _;
-    let out = std::process::Command::new("/usr/sbin/lsof")
-        .args(["-a", "-d", "cwd", "-Fn", "-p", &pid.to_string()])
-        .stderr(std::process::Stdio::null())
-        .output()
-        .ok()?;
-    let line = out
-        .stdout
+    // -b -w: no blocking kernel calls (a dead network mount), no warnings about them.
+    let stdout = output_within(
+        LOOKUP_TIMEOUT,
+        tokio::process::Command::new("/usr/sbin/lsof").args([
+            "-b",
+            "-w",
+            "-a",
+            "-d",
+            "cwd",
+            "-Fn",
+            "-p",
+            &pid.to_string(),
+        ]),
+    )
+    .await?;
+    let line = stdout
         .split(|b| *b == b'\n')
         .find_map(|l| l.strip_prefix(b"n"))?;
     Some(PathBuf::from(std::ffi::OsStr::from_bytes(line)))
 }
 
 /// macOS: the program's name from `ps` (it prints the path, the name is its last part).
-fn macos_comm(pid: u32) -> Option<String> {
-    let out = std::process::Command::new("/bin/ps")
-        .args(["-o", "comm=", "-p", &pid.to_string()])
-        .stderr(std::process::Stdio::null())
-        .output()
-        .ok()?;
-    let path = String::from_utf8(out.stdout).ok()?;
+async fn macos_comm(pid: u32) -> Option<String> {
+    let stdout = output_within(
+        LOOKUP_TIMEOUT,
+        tokio::process::Command::new("/bin/ps").args(["-o", "comm=", "-p", &pid.to_string()]),
+    )
+    .await?;
+    let path = String::from_utf8(stdout).ok()?;
     let name = path.trim().rsplit('/').next()?;
     Some(name.to_owned())
 }
 
 /// The program in front of the shell (`/proc/<pgid>/comm`, `ps` on macOS), `None` when the shell
 /// itself is.
-fn foreground(master: &OwnedFd, shell_pid: Option<u32>) -> Option<String> {
+async fn foreground(master: &OwnedFd, shell_pid: Option<u32>) -> Option<String> {
     let group = rustix::termios::tcgetpgrp(master).ok()?;
     let pid = u32::try_from(group.as_raw_nonzero().get()).ok()?;
     if Some(pid) == shell_pid {
         return None;
     }
     let name = if cfg!(target_os = "macos") {
-        macos_comm(pid)?
+        macos_comm(pid).await?
     } else {
         std::fs::read_to_string(format!("/proc/{pid}/comm")).ok()?
     };
@@ -182,14 +213,18 @@ async fn run_loop(
                 }
                 Some(SessionInput::Forward(_)) => tracing::debug!("forward for a local session ignored"),
                 Some(SessionInput::QueryCwd) => {
-                    if let Some(path) = current_cwd(&local.master, local.child.id()) {
+                    if let Some(path) = current_cwd(&local.master, local.child.id()).await {
                         pump.emit(SessionOutput::Cwd { path, remote: false }).await?;
                     }
-                    let name = foreground(&local.master, local.child.id());
+                    let name = foreground(&local.master, local.child.id()).await;
                     pump.emit(SessionOutput::Foreground(name)).await?;
                 }
                 Some(SessionInput::WatchForeground(on)) => {
-                    watching = on.then(|| foreground(&local.master, local.child.id()));
+                    watching = if on {
+                        Some(foreground(&local.master, local.child.id()).await)
+                    } else {
+                        None
+                    };
                 }
                 Some(SessionInput::Close) | None => return Ok(End::Close),
             },
@@ -214,7 +249,7 @@ async fn run_loop(
             () = sleep_until(sync_deadline.map_or_else(Instant::now, Instant::from_std)),
                 if sync_deadline.is_some() => pump.feed(&[]).await?,
             _ = watch_tick.tick(), if watching.is_some() => {
-                let now = foreground(&local.master, local.child.id());
+                let now = foreground(&local.master, local.child.id()).await;
                 match (watching.take().flatten(), now) {
                     (Some(name), None) => pump.emit(SessionOutput::ForegroundDone(name)).await?,
                     (_, now) => watching = Some(now),
@@ -368,24 +403,118 @@ mod tests {
     use super::*;
 
     #[cfg(target_os = "macos")]
-    #[test]
-    fn macos_cwd_and_program_of_a_live_process() {
-        let dir = std::env::temp_dir().canonicalize().unwrap_or_default();
+    #[tokio::test]
+    async fn macos_cwd_and_program_of_a_live_process() {
+        // Accented, as Italian paths are: `lsof` escapes them (`\xc3\xa8`) without a locale.
+        let base = std::env::temp_dir().canonicalize().unwrap_or_default();
+        let dir = base.join(format!("fogu-cwd caffè {}", std::process::id()));
+        let _made = std::fs::create_dir_all(&dir);
         let mut child = std::process::Command::new("/bin/sleep")
             .arg("5")
             .current_dir(&dir)
             .spawn()
             .ok();
         let pid = child.as_ref().map_or(0, std::process::Child::id);
-        let cwd = macos_cwd(pid).and_then(|p| p.canonicalize().ok());
-        let name = macos_comm(pid);
+        let cwd = macos_cwd(pid).await.and_then(|p| p.canonicalize().ok());
+        let name = macos_comm(pid).await;
         if let Some(child) = child.as_mut() {
             let _ = child.kill();
             let _ = child.wait();
         }
+        let _removed = std::fs::remove_dir(&dir);
         assert_eq!(cwd, Some(dir));
         assert_eq!(name.as_deref(), Some("sleep"));
-        assert_eq!(macos_cwd(u32::MAX), None, "no such process");
+        assert_eq!(macos_cwd(u32::MAX).await, None, "no such process");
+    }
+
+    /// A program with an accented name keeps it (`ps` without a locale prints `dormM-CM-,`).
+    /// Needs `cc` (Xcode command line tools) to build that program; skips without it.
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn macos_program_names_keep_their_accents() {
+        let dir = std::env::temp_dir().join(format!("fogu-comm-{}", std::process::id()));
+        let _made = std::fs::create_dir_all(&dir);
+        let program = dir.join("dormì");
+        let built = std::process::Command::new("cc")
+            .args(["-x", "c", "-", "-o"])
+            .arg(&program)
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .and_then(|mut cc| {
+                use std::io::Write as _;
+                if let Some(stdin) = cc.stdin.as_mut() {
+                    stdin
+                        .write_all(b"#include <unistd.h>\nint main(void){sleep(5);return 0;}\n")?;
+                }
+                drop(cc.stdin.take());
+                cc.wait()
+            })
+            .is_ok_and(|status| status.success());
+        if !built {
+            let _removed = std::fs::remove_dir_all(&dir);
+            return;
+        }
+        let mut child = std::process::Command::new(&program).spawn().ok();
+        let pid = child.as_ref().map_or(0, std::process::Child::id);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let name = macos_comm(pid).await;
+        if let Some(child) = child.as_mut() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        let _removed = std::fs::remove_dir_all(&dir);
+        assert_eq!(name.as_deref(), Some("dormì"));
+    }
+
+    /// `lsof` takes ~0.2 s and `ps` runs every second while watching: other tasks must keep
+    /// running meanwhile (one thread, so a blocking call would starve the spawned task).
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[expect(clippy::unwrap_used, reason = "test")]
+    fn macos_lookups_do_not_block_the_runtime() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let pid = std::process::id();
+            for lookup in ["cwd", "comm"] {
+                let ran = Arc::new(AtomicBool::new(false));
+                let flag = Arc::clone(&ran);
+                tokio::spawn(async move { flag.store(true, Ordering::SeqCst) });
+                let found = if lookup == "cwd" {
+                    macos_cwd(pid).await.is_some()
+                } else {
+                    macos_comm(pid).await.is_some()
+                };
+                assert!(found, "{lookup}");
+                assert!(ran.load(Ordering::SeqCst), "{lookup} blocked the runtime");
+            }
+        });
+    }
+
+    /// A hung `lsof` (dead network mount) must not hold the session: it is killed at the limit.
+    #[tokio::test]
+    async fn lookups_give_up_and_kill_the_command_at_the_limit() {
+        let started = std::time::Instant::now();
+        let mut sleeper = tokio::process::Command::new("/bin/sleep");
+        sleeper.arg("7.913");
+        let out = output_within(Duration::from_millis(200), &mut sleeper).await;
+        assert_eq!(out, None);
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "{:?}",
+            started.elapsed()
+        );
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let left = std::process::Command::new("pgrep")
+            .args(["-f", "sleep 7.913"])
+            .output()
+            .map(|o| o.stdout)
+            .unwrap_or_default();
+        assert!(left.is_empty(), "the command still runs");
     }
 
     #[test]
