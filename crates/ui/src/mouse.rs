@@ -13,7 +13,7 @@ use iced::{Event, Point, Rectangle, window};
 
 use crate::keys;
 use crate::message::{Message, PasteSource, SelectEvent};
-use crate::metrics::{CellMetrics, CellPos, pixel_to_cell};
+use crate::metrics::{CellMetrics, CellPos, grid_cell};
 
 /// Auto-scroll pace while drag-selecting past the top/bottom edge.
 const AUTOSCROLL_EVERY: Duration = Duration::from_millis(50);
@@ -33,7 +33,7 @@ pub struct MouseConfig {
 /// Where the grid sits on screen.
 #[derive(Clone, Copy, Debug)]
 pub struct Grid {
-    /// Widget bounds; the grid starts at the top-left corner.
+    /// Widget bounds; the grid starts [`crate::metrics::GRID_PAD`] in from the top-left corner.
     pub bounds: Rectangle,
     /// Cell size.
     pub metrics: CellMetrics,
@@ -60,12 +60,7 @@ fn wheel_lines(grid: &Grid) -> f32 {
 
 impl Grid {
     fn cell_at(&self, p: Point) -> CellPos {
-        pixel_to_cell(
-            p - self.bounds.position(),
-            &self.metrics,
-            self.cols,
-            self.rows,
-        )
+        grid_cell(self.bounds, p, &self.metrics, self.cols, self.rows)
     }
 
     /// `(col, row)` under `p`, clamped to the grid.

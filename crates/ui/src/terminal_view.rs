@@ -19,7 +19,9 @@ use iced::{
 
 use crate::keys;
 use crate::message::Message;
-use crate::metrics::{CellMetrics, cells_f32 as cells, grid_size, pixel_to_cell};
+use crate::metrics::{
+    CellMetrics, cells_f32 as cells, grid_cell, grid_origin, grid_room, grid_size,
+};
 use crate::mouse::{Grid, MouseConfig, MouseState};
 use crate::palette::{Colors, to_iced};
 use crate::runs::{Style, Underline, cell_style, explicit_bg, row_runs};
@@ -115,8 +117,9 @@ impl<'a> TerminalView<'a> {
             _ => state.modifiers.command(),
         };
         let link_under = || {
-            let at = cursor.position_over(bounds)? - bounds.position();
-            let cell = pixel_to_cell(at, &self.metrics, self.snapshot.cols, self.snapshot.rows);
+            let at = cursor.position_over(bounds)?;
+            let (cols, rows) = (self.snapshot.cols, self.snapshot.rows);
+            let cell = grid_cell(bounds, at, &self.metrics, cols, rows);
             links::link_at(self.snapshot, cell.col, cell.row)
         };
         match event {
@@ -346,7 +349,7 @@ impl<'a> TerminalView<'a> {
         let Some(label) = self.overlay else { return };
         let row = (self.snapshot.cursor.row + 1).min(self.snapshot.rows.saturating_sub(1));
         let cols = label.chars().count();
-        let rect = self.cell_rect(bounds.position(), 0, row, cols);
+        let rect = self.cell_rect(grid_origin(bounds), 0, row, cols);
         fill(renderer, rect, self.colors.foreground());
         let style = Style {
             fg: self.colors.background(),
@@ -367,7 +370,7 @@ impl TerminalView<'_> {
     /// The hovered link: underlined, with its real target on the row below (above on the last
     /// row) so an OSC 8 text can't pass for another address.
     fn draw_link(&self, renderer: &mut iced::Renderer, bounds: Rectangle, link: &links::Link) {
-        let origin = bounds.position();
+        let origin = grid_origin(bounds);
         let cells_rect = self.cell_rect(origin, link.start, link.row, link.end - link.start);
         let underline = Rectangle {
             y: cells_rect.y + cells_rect.height - 1.0,
@@ -455,7 +458,7 @@ impl Widget<Message, iced::Theme, iced::Renderer> for TerminalView<'_> {
         let bounds = layout.bounds();
         // Any event (incl. the RedrawRequested sent before every frame) checks whether the
         // widget's size now holds a different grid.
-        let (cols, rows) = grid_size(bounds.size(), &self.metrics);
+        let (cols, rows) = grid_size(grid_room(bounds.size()), &self.metrics);
         if (usize::from(cols), usize::from(rows)) != (self.snapshot.cols, self.snapshot.rows) {
             shell.publish(Message::GridResized {
                 pane: self.pane,
@@ -540,7 +543,7 @@ impl Widget<Message, iced::Theme, iced::Renderer> for TerminalView<'_> {
             Event::Window(window::Event::RedrawRequested(_)) => {
                 let c = &self.snapshot.cursor;
                 shell.request_input_method::<&str>(&InputMethod::Enabled {
-                    cursor: self.cell_rect(bounds.position(), c.col, c.row, 1),
+                    cursor: self.cell_rect(grid_origin(bounds), c.col, c.row, 1),
                     purpose: input_method::Purpose::Terminal,
                     preedit: None,
                 });
@@ -592,7 +595,7 @@ impl Widget<Message, iced::Theme, iced::Renderer> for TerminalView<'_> {
             };
             renderer::Renderer::fill_quad(renderer, quad, bg);
         }
-        let origin = bounds.position();
+        let origin = grid_origin(bounds);
         self.draw_runs(renderer, origin, bounds);
         self.draw_selection(renderer, origin);
         self.draw_cursor(renderer, origin, bounds);

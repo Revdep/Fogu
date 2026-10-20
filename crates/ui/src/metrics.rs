@@ -120,6 +120,34 @@ pub fn grid_size(bounds: iced::Size, metrics: &CellMetrics) -> (u16, u16) {
     )
 }
 
+/// Room between a pane's left / top edge and its grid: text never touches the edge, and a
+/// selection of the first column can start in the margin.
+pub const GRID_PAD: Vector = Vector::new(8.0, 6.0);
+
+/// Where the grid starts in the widget's `bounds`.
+pub fn grid_origin(bounds: iced::Rectangle) -> iced::Point {
+    bounds.position() + GRID_PAD
+}
+
+/// The part of a widget of `size` left for the grid.
+pub fn grid_room(size: iced::Size) -> iced::Size {
+    iced::Size::new(
+        (size.width - GRID_PAD.x).max(0.0),
+        (size.height - GRID_PAD.y).max(0.0),
+    )
+}
+
+/// The cell under `p` in a widget at `bounds` (see [`pixel_to_cell`] for the clamping).
+pub fn grid_cell(
+    bounds: iced::Rectangle,
+    p: iced::Point,
+    m: &CellMetrics,
+    cols: usize,
+    rows: usize,
+) -> CellPos {
+    pixel_to_cell(p - grid_origin(bounds), m, cols, rows)
+}
+
 /// Rounds a logical length to whole device pixels (at least 1). Returns the snapped logical
 /// length and the device-pixel count.
 pub fn round_to_device(logical: f32, scale: f32) -> (f32, u16) {
@@ -400,6 +428,29 @@ mod tests {
                 "{row} @ {offset}"
             );
         }
+    }
+
+    #[test]
+    fn the_grid_sits_inside_a_left_and_top_margin() {
+        let m = CellMetrics::new(FontUnits::FALLBACK, 16.0, 1.0);
+        // cell 10 × 19
+        let size = iced::Size::new(800.0 + GRID_PAD.x, 456.0 + GRID_PAD.y);
+        let widget = iced::Rectangle::new(iced::Point::new(100.0, 50.0), size);
+        let start = grid_origin(widget);
+        assert!(start.x >= 106.0 && start.y >= 54.0, "no margin: {start:?}");
+        assert_eq!(grid_size(grid_room(widget.size()), &m), (80, 24));
+        let (x0, y0) = (100.0 + GRID_PAD.x, 50.0 + GRID_PAD.y);
+        assert_eq!(grid_origin(widget), iced::Point::new(x0, y0));
+        let at = |x: f32, y: f32| grid_cell(widget, iced::Point::new(x, y), &m, 80, 24);
+        let cell = |col, row, side| CellPos { col, row, side };
+        // In the margin: the first cell's left half, where a selection of column 0 starts.
+        assert_eq!(at(101.0, 51.0), cell(0, 0, Side::Left));
+        assert_eq!(at(x0 + 12.0, y0 + 20.0), cell(1, 1, Side::Left));
+        assert_eq!(at(x0 + 8.0, y0), cell(0, 0, Side::Right));
+        assert_eq!(
+            grid_room(iced::Size::new(1.0, 1.0)),
+            iced::Size::new(0.0, 0.0)
+        );
     }
 
     #[test]
