@@ -123,8 +123,36 @@ second and stays out of your way.
 
 ## Install
 
-Fogu runs on Linux (X11 and Wayland) and macOS (Intel and Apple Silicon). Build from source with a Rust toolchain
-([rustup](https://rustup.rs) picks the pinned version automatically):
+Fogu runs on Linux (X11 and Wayland) and macOS (Intel and Apple Silicon).
+
+### Prebuilt release
+
+Each [release](https://github.com/Revdep/Fogu/releases) has an archive per platform
+(`linux-x86_64`, `macos-aarch64` for Apple Silicon, `macos-x86_64` for Intel). Download,
+unpack and install for the current user, no root and no Rust needed:
+
+```bash
+platform=linux-x86_64   # or macos-aarch64 / macos-x86_64
+curl -fsSL "https://github.com/Revdep/Fogu/releases/latest/download/fogu-$platform.tar.gz" | tar xz
+cd "fogu-$platform"
+./scripts/install.sh
+fogu
+```
+
+On Linux there is also a single-file AppImage, no install step:
+
+```bash
+curl -fsSLo Fogu.AppImage https://github.com/Revdep/Fogu/releases/latest/download/Fogu-x86_64.AppImage
+chmod +x Fogu.AppImage
+./Fogu.AppImage
+```
+
+`./scripts/install.sh --uninstall` removes the archive install again. The Linux builds need glibc 2.35 or newer
+(Ubuntu 22.04, Debian 12, Fedora 36 and later). Checksums are in `SHA256SUMS` on the release page.
+
+### From source
+
+With a Rust toolchain ([rustup](https://rustup.rs) picks the pinned version automatically):
 
 ```bash
 git clone https://github.com/Revdep/Fogu.git
@@ -139,12 +167,15 @@ Build dependencies on Debian/Ubuntu: `sudo apt install build-essential pkg-confi
 
 ### macOS
 
-The same script builds `~/Applications/Fogu.app` (open it from Finder, Launchpad or Spotlight)
-and puts `fogu` in `~/.local/bin`. It needs the Xcode command line tools
+The same script installs `~/Applications/Fogu.app` (open it from Finder, Launchpad or Spotlight)
+and puts `fogu` in `~/.local/bin`. Building from source needs the Xcode command line tools
 (`xcode-select --install`). Good to know:
 
-- Fogu is not signed. A binary downloaded rather than built needs
-  `xattr -d com.apple.quarantine fogu` before it runs.
+- Fogu is not signed or notarized by Apple (that takes a paid Apple Developer account), so
+  Gatekeeper blocks it when the archive was downloaded with a browser. The `curl` commands above
+  avoid that: files fetched by `curl` are not quarantined. After a browser download, either run
+  `xattr -dr com.apple.quarantine fogu-macos-*` before `./scripts/install.sh`, or try to open
+  Fogu once, then allow it under System Settings → Privacy & Security → Open Anyway.
 - Option + a letter is Meta (`Option+f` moves a word forward); Option + any other key types its
   character, so `@`, `#`, `[` and `~` work on layouts that need Option. With
   `alt_is_meta = false` under `[terminal]`, Option only types characters: layouts that put

@@ -1,0 +1,74 @@
+name: release
+# Push a tag matching the workspace version (`v0.1.0` for version = "0.1.0") to publish a
+# GitHub Release with one archive per platform.
+on:
+  push:
+    tags: ["v*"]
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          # 22.04, not 24.04: the binary needs the build host's glibc (2.35) or newer
+          - os: ubuntu-22.04
+            name: linux-x86_64
+          - os: macos-15
+            name: macos-aarch64
+          - os: macos-15-intel
+            name: macos-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: tag matches the workspace version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          [ "${GITHUB_REF_NAME}" = "v$version" ] || { echo "tag $GITHUB_REF_NAME != v$version"; exit 1; }
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev libxkbcommon-dev libwayland-dev
+      - run: cargo build --release --locked -p fogu
+      # the layout scripts/install.sh expects, so the archive installs with the same script
+      - name: package
+        run: |
+          d="fogu-${{ matrix.name }}"
+          mkdir -p "$d/target/release" "$d/scripts" "$d/assets/icons"
+          cp target/release/fogu "$d/target/release/"
+          cp scripts/install.sh "$d/scripts/"
+          cp assets/fogu.png assets/fogu.desktop "$d/assets/"
+          cp assets/icons/fogu-*.png "$d/assets/icons/"
+          cp LICENSE README.md THIRD_PARTY_LICENSES "$d/"
+          tar czf "$d.tar.gz" "$d"
+      # the binary links only libc/libm/libgcc_s, so the AppDir needs nothing but the binary
+      - name: appimage
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p Fogu.AppDir/usr/bin
+          cp target/release/fogu Fogu.AppDir/usr/bin/
+          cp assets/fogu.desktop Fogu.AppDir/
+          cp assets/icons/fogu-256.png Fogu.AppDir/fogu.png
+          ln -s usr/bin/fogu Fogu.AppDir/AppRun
+          curl -fsSLo appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          # no FUSE on the runner: the tool unpacks itself instead of mounting
+          APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 ./appimagetool Fogu.AppDir Fogu-x86_64.AppImage
+      - uses: actions/upload-artifact@v7
+        with:
+          name: fogu-${{ matrix.name }}
+          path: |
+            fogu-${{ matrix.name }}.tar.gz
+            Fogu-x86_64.AppImage
+          if-no-files-found: ignore
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+      - run: sha256sum fogu-*.tar.gz Fogu-*.AppImage > SHA256SUMS
+      - run: gh release create "$GITHUB_REF_NAME" fogu-*.tar.gz Fogu-*.AppImage SHA256SUMS --repo "$GITHUB_REPOSITORY" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

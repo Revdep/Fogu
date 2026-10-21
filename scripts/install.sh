@@ -4,7 +4,8 @@
 #   scripts/install.sh              build + install (idempotent)
 #   scripts/install.sh --uninstall  remove exactly what was installed
 # The install root is $HOME (override HOME to install elsewhere, e.g. into a temp dir to test).
-# Set FOGU_SKIP_BUILD=1 to reuse an existing target/release/fogu.
+# Set FOGU_SKIP_BUILD=1 to reuse an existing target/release/fogu (automatic in a release archive,
+# which has no Cargo.toml).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -22,7 +23,7 @@ if [[ "$(uname)" == Darwin ]]; then
         echo "Fogu uninstalled ($app, $bin_dir/fogu)"
         exit 0
     fi
-    [[ "${FOGU_SKIP_BUILD:-}" == 1 ]] || cargo build --release --locked -p fogu
+    [[ "${FOGU_SKIP_BUILD:-}" == 1 || ! -f Cargo.toml ]] || cargo build --release --locked -p fogu
     rm -rf "$app"
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$bin_dir"
     install -m 755 target/release/fogu "$app/Contents/MacOS/fogu"
@@ -72,7 +73,7 @@ if [[ "${1:-}" == "--uninstall" ]]; then
     exit 0
 fi
 
-[[ "${FOGU_SKIP_BUILD:-}" == 1 ]] || cargo build --release --locked -p fogu
+[[ "${FOGU_SKIP_BUILD:-}" == 1 || ! -f Cargo.toml ]] || cargo build --release --locked -p fogu
 install -Dm755 target/release/fogu "$bin_dir/fogu"
 for s in "${sizes[@]}"; do
     install -Dm644 "assets/icons/fogu-$s.png" "$data_dir/icons/hicolor/${s}x${s}/apps/fogu.png"
