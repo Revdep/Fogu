@@ -25,14 +25,19 @@
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/ssh-manager.png" alt="SSH manager: hosts from ~/.ssh/config in the sidebar, two SSH tabs" width="860">
+  <img src="docs/screenshots/welcome.png" alt="Start page with quick connect, recent hosts and shortcuts" width="860">
 </p>
-<p align="center"><em>SSH manager: every host from <code>~/.ssh/config</code>, one click to connect.</em></p>
+<p align="center"><em>Start page: a second window opens here, clean, while the first one keeps your tabs.</em></p>
 
 <p align="center">
-  <img src="docs/screenshots/picker.png" alt="Quick profile picker with fuzzy search" width="860">
+  <img src="docs/screenshots/ssh-manager.png" alt="Profiles sidebar with groups, live status dots and hosts from ~/.ssh/config" width="860">
 </p>
-<p align="center"><em>Quick picker (<code>Ctrl+Shift+E</code>): type a few letters, press Enter.</em></p>
+<p align="center"><em>Profiles sidebar: groups, a dot on every live host, every host from <code>~/.ssh/config</code>.</em></p>
+
+<p align="center">
+  <img src="docs/screenshots/picker.png" alt="Quick picker with fuzzy search and host details" width="860">
+</p>
+<p align="center"><em>Quick picker (<code>Ctrl+Shift+E</code>): type a few letters, press Enter; Shift+Enter splits.</em></p>
 
 <p align="center">
   <img src="docs/screenshots/sftp.png" alt="SFTP panel next to the shell on the same connection" width="860">
@@ -40,9 +45,24 @@
 <p align="center"><em>SFTP panel on the same connection as the shell.</em></p>
 
 <p align="center">
-  <img src="docs/screenshots/splits.png" alt="Split panes on different hosts" width="860">
+  <img src="docs/screenshots/splits.png" alt="Split panes as floating tiles on two hosts" width="860">
 </p>
-<p align="center"><em>Split panes, each on its own host.</em></p>
+<p align="center"><em>Split panes, each on its own host; the focused one glows.</em></p>
+
+<p align="center">
+  <img src="docs/screenshots/editor.png" alt="Profile page with groups, icon, tab colour and SSH options" width="860">
+</p>
+<p align="center"><em>Profile page: one scrolling page, only the values you change are written to <code>config.toml</code>.</em></p>
+
+<p align="center">
+  <img src="docs/screenshots/forwarding.png" alt="Port forwarding dialog with live routes" width="860">
+</p>
+<p align="center"><em>Port forwarding: local, remote and SOCKS5 routes, managed live.</em></p>
+
+<p align="center">
+  <img src="docs/screenshots/settings.png" alt="Settings page with the colour scheme gallery" width="860">
+</p>
+<p align="center"><em>Settings (<code>Ctrl+,</code>): changes apply live to every tab.</em></p>
 
 ## Why Fogu
 
@@ -68,14 +88,20 @@ second and stays out of your way.
 - Mouse reporting for TUI apps, with Shift to override
 - Clickable links: OSC 8 hyperlinks plus detected URLs and paths, behind a scheme allow-list
 - Context menus everywhere, configurable right-click behaviour
-- Tab recovery: layout and recent scrollback come back after a restart (opt-out)
-- Colour schemes, fonts, cursor and every key binding configurable
+- Tab recovery: layout and recent scrollback come back after a restart (opt-out). A second
+  window opened while Fogu runs starts clean on the start page and leaves the saved tabs alone
+- Start page with quick connect, recent hosts and the usual shortcuts
+- Settings page: colour scheme gallery, fonts, cursor, terminal, sidebar, SFTP and recovery
+  options, applied live and written to `config.toml`
+- Built-in schemes: Fogu Dark, Fogu Light, Solarized Dark, Dracula, Nocturne, Catppuccin Mocha;
+  fonts, cursor and every key binding configurable
 
 ### SSH manager
 - Sidebar with groups, search and quick connect (`user@host:port`)
 - Reads your `~/.ssh/config` live (Host, HostName, User, Port, IdentityFile, ProxyJump,
   ProxyCommand, HostKeyAlias…) — no import step, nothing duplicated
-- Full profile editor that edits `config.toml` in place, keeping your comments
+- Profile page that edits `config.toml` in place, keeping your comments and writing only the
+  values you change: groups, icon, tab colour, background, authentication, network, scripts
 - Password, public key, ssh-agent and keyboard-interactive authentication
 - Strict `known_hosts` checking: a changed host key is never accepted silently
 - Jump hosts, proxy commands, SOCKS5 and HTTP proxies — a proxied profile never falls back to a
@@ -141,7 +167,7 @@ Fogu works with no configuration. To customise it, edit `~/.config/fogu/config.t
 
 ```toml
 [appearance]
-color_scheme = "Dracula"   # built in: Fogu Dark, Fogu Light, Solarized Dark, Dracula
+color_scheme = "Dracula"   # built in: Fogu Dark, Fogu Light, Solarized Dark, Dracula, Nocturne, Catppuccin Mocha
 
 [[profiles]]
 id = "home-server"
@@ -161,6 +187,7 @@ Hosts from `~/.ssh/config` appear in the sidebar automatically.
 | Go to tab 1-9 | `Alt+1`..`Alt+9` | `Cmd+1`..`Cmd+9` |
 | Profile picker | `Ctrl+Shift+E` | `Cmd+E` |
 | Profiles sidebar / SFTP panel | `Ctrl+Shift+M` / `Ctrl+Shift+O` | `Cmd+Shift+M` / `Cmd+Shift+O` |
+| Settings | `Ctrl+,` | `Cmd+,` |
 | Split right / split down | `Ctrl+Shift+S` / `Ctrl+Shift+D` | `Cmd+Shift+D` / `Cmd+D` |
 | Move between panes | `Ctrl+Alt+Arrows` | `Cmd+Option+Arrows` |
 | Copy / paste | `Ctrl+Shift+C` / `Ctrl+Shift+V` | `Cmd+C` / `Cmd+V` |

@@ -1519,7 +1519,7 @@ dependencies = [
 
 [[package]]
 name = "fogu"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "clap",
  "fogu-core",
@@ -1532,7 +1532,7 @@ dependencies = [
 
 [[package]]
 name = "fogu-core"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "insta",
  "serde",
@@ -1544,7 +1544,7 @@ dependencies = [
 
 [[package]]
 name = "fogu-session"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "bytes",
  "fogu-core",
@@ -1567,7 +1567,7 @@ dependencies = [
 
 [[package]]
 name = "fogu-term"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "alacritty_terminal",
  "fogu-core",
@@ -1580,7 +1580,7 @@ dependencies = [
 
 [[package]]
 name = "fogu-ui"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "dirs",
  "fogu-core",

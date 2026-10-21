@@ -101,8 +101,6 @@ pub enum Message {
     CancelPaste,
     /// A keymap/menu action.
     Action(Action),
-    /// Left-click on a tab header.
-    ActivateTab(TabId),
     /// Middle-click or `×` on a tab header.
     CloseTab(TabId),
     /// The pointer entered (`Some`) or left (`None`) a tab header.
@@ -167,6 +165,8 @@ pub enum Message {
     TabSaveToProfile,
     /// Tab recovery: compare the layout with the last save (every second).
     RecoveryTick,
+    /// Poll `config.toml` and apply an external edit when its file stamp changed.
+    ConfigTick,
     /// The window's close button: save the session, then exit.
     CloseRequested,
     /// A title bar button or drag (the window has no OS decorations).
@@ -200,6 +200,10 @@ pub enum Message {
     Profiles(ProfilesMsg),
     /// The profile editor of tab `.0`.
     Editor(TabId, EditorMsg),
+    /// The settings tab.
+    Settings(crate::settings::SettingsMsg),
+    /// A start page tab.
+    Welcome(crate::tab::TabId, crate::welcome::WelcomeMsg),
     /// The "close live SSH session?" modal: `true` = close, `false` = keep it.
     ConfirmClose(bool),
     /// SFTP engine events and side-panel input.

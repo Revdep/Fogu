@@ -330,24 +330,27 @@ impl App {
     /// Escape closes the innermost overlay: picker, close / delete confirmation, the front
     /// pane's prompt (declined), menu, the sidebar's search (then its keyboard focus), inline
     /// rename.
-    pub(crate) fn on_escape(&mut self) {
-        if self.secret_dialog.take().is_some()
-            || self.search.take().is_some()
-            || self.picker.take().is_some()
-            || self.forwards.take().is_some()
+    pub(crate) fn on_escape(&mut self) -> Task<Message> {
+        if self.secret_dialog.take().is_some() || self.search.take().is_some() {
+            return Task::none();
+        }
+        if self.picker.is_some() {
+            return self.dismiss_picker();
+        }
+        if self.forwards.take().is_some()
             || self.pending_close.take().is_some()
             || self.pending_paste.take().is_some()
             || self.profiles.pending_delete.take().is_some()
         {
-            return;
+            return Task::none();
         }
         if let Some(pane) = self.active_pane().filter(|p| p.prompt.is_some()) {
             let id = pane.id;
             self.answer(id, PromptReply::Reject);
-            return;
+            return Task::none();
         }
         if self.menu.take().is_some() || self.sidebar_escape() {
-            return;
+            return Task::none();
         }
         let active = self.active;
         let panel = self.tabs.iter_mut().find(|t| t.id == active);
@@ -355,9 +358,10 @@ impl App {
             .and_then(|t| t.sftp.as_mut())
             .is_some_and(crate::sftp::SftpPanelState::cancel_op)
         {
-            return;
+            return Task::none();
         }
         self.renaming = None;
+        Task::none()
     }
 }
 
@@ -376,7 +380,9 @@ fn labelled(label: &str, value: String) -> Element<'_, Message> {
 }
 
 fn choose_button(label: &str, pane: PaneId, choice: Choice) -> button::Button<'_, Message> {
-    button(text(label)).on_press(Message::Prompt(PromptMsg::Choose(pane, choice)))
+    button(text(label))
+        .style(crate::style::primary)
+        .on_press(Message::Prompt(PromptMsg::Choose(pane, choice)))
 }
 
 fn field(pane: PaneId, idx: usize, value: &SecretString, secret: bool) -> Element<'_, Message> {
@@ -404,7 +410,7 @@ fn remember<'a>(pane: PaneId, state: &PromptState, what: &'static str) -> Elemen
             row![
                 tick(format!("Replace the stored {what}")),
                 space().width(Length::Fill),
-                choose_button("Forget it", pane, Choice::Forget).style(button::secondary),
+                choose_button("Forget it", pane, Choice::Forget).style(crate::style::secondary),
             ]
             .align_y(iced::Alignment::Center),
         ]
@@ -421,9 +427,9 @@ fn remember<'a>(pane: PaneId, state: &PromptState, what: &'static str) -> Elemen
 fn submit_row(pane: PaneId, label: &str) -> Element<'_, Message> {
     row![
         button(text(label))
-            .style(button::primary)
+            .style(crate::style::primary)
             .on_press(Message::Prompt(PromptMsg::Submit(pane))),
-        choose_button("Cancel", pane, Choice::Cancel).style(button::secondary),
+        choose_button("Cancel", pane, Choice::Cancel).style(crate::style::secondary),
     ]
     .spacing(8)
     .into()
@@ -448,10 +454,11 @@ pub(crate) fn view(pane: PaneId, state: &PromptState) -> Element<'_, Message> {
             labelled("Key type", safe(key_type)),
             labelled("Fingerprint", safe(fingerprint)),
             row![
-                choose_button("Accept once", pane, Choice::AcceptOnce).style(button::secondary),
+                choose_button("Accept once", pane, Choice::AcceptOnce)
+                    .style(crate::style::secondary),
                 choose_button("Accept and save", pane, Choice::AcceptAndSave),
                 space().width(Length::Fill),
-                choose_button("Cancel", pane, Choice::Cancel).style(button::secondary),
+                choose_button("Cancel", pane, Choice::Cancel).style(crate::style::secondary),
             ]
             .spacing(8),
         ]
@@ -573,7 +580,7 @@ fn changed_view(pane: PaneId, state: &PromptState) -> Element<'_, Message> {
             format!("{}:{line}", safe(&known_hosts_path.display().to_string()))
         ),
         row![
-            choose_button("Cancel", pane, Choice::Cancel).style(button::primary),
+            choose_button("Cancel", pane, Choice::Cancel).style(crate::style::primary),
             space().width(Length::Fill),
             replace.style(button::danger),
         ]

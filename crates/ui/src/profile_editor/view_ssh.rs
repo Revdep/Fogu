@@ -10,9 +10,10 @@ use fogu_core::{Config, EffectiveSsh, SshOpts};
 
 use super::ProfileEditor;
 use super::fields::{AUTH, BACKSPACE, FieldId};
-use super::view::{Row, index_of, labels, shown, with_notes};
+use super::view::{Row, Section, index_of, labels, shown, with_notes};
 use super::view_lists::{algorithms, forwards, line, scripts};
 use crate::forms::{self, ERROR};
+use crate::icons::Icon;
 use crate::sftp::panel::Look;
 
 /// Shown at the top of Network.
@@ -20,21 +21,30 @@ const ROUTE_NOTE: &str = "Reach the host through at most one of: a jump host, a 
      a SOCKS5 proxy or an HTTP proxy. A profile that sets more than one refuses to connect. \
      Every jump host's key is checked like any other host's.";
 
+/// The SSH sections with their nav title and icon.
 pub(super) fn sections<'a>(
     ed: &'a ProfileEditor,
     ssh: &'a SshOpts,
     config: &Config,
     look: Look,
-) -> Vec<Row<'a>> {
+) -> Vec<Section<'a>> {
     let d = &config.profile_defaults.ssh;
     let eff = resolve_ssh(ssh, d);
     vec![
-        connection(ed, ssh, d, &eff, look),
-        authentication(ed, ssh, d, &eff, look),
-        network(ed, ssh, &eff, look),
-        algorithms(ed, ssh, look),
-        scripts(ed, ssh, look),
-        terminal(ed, ssh, &eff, look),
+        (
+            "Connection",
+            Icon::Plugs,
+            connection(ed, ssh, d, &eff, look),
+        ),
+        (
+            "Authentication",
+            Icon::Key,
+            authentication(ed, ssh, d, &eff, look),
+        ),
+        ("Network", Icon::Ports, network(ed, ssh, &eff, look)),
+        ("Algorithms", Icon::Lock, algorithms(ed, ssh, look)),
+        ("Login scripts", Icon::FileCode, scripts(ed, ssh, look)),
+        ("Terminal", Icon::Local, terminal(ed, ssh, &eff, look)),
     ]
 }
 
@@ -65,7 +75,7 @@ fn text_row<'a>(
     value: Option<&str>,
     placeholder: &str,
 ) -> Row<'a> {
-    let field = forms::text_field(look, id, label, value.unwrap_or_default(), placeholder);
+    let field = forms::mono_field(look, id, label, value.unwrap_or_default(), placeholder);
     with_notes(ed, id, key, field)
 }
 
@@ -265,11 +275,11 @@ fn authentication<'a>(
         |p| p.to_string_lossy().into_owned(),
     );
     let mut rows = vec![
-        forms::choice(
+        forms::radios(
             look,
             FieldId::Auth,
             "Method",
-            labels(&AUTH),
+            &labels(&AUTH),
             index_of(&AUTH, &eff.auth),
         ),
         forms::note(

@@ -77,7 +77,7 @@ pub(super) fn forwards<'a>(ed: &'a ProfileEditor, ssh: &'a SshOpts, look: Look) 
         ]
         .spacing(4)
         .align_y(Alignment::Center);
-        let entry: Row<'a> = forms::list_row(FieldId::Forwards, i, cells.into());
+        let entry: Row<'a> = forms::list_row(look, FieldId::Forwards, i, cells.into());
         // Same widget tree with or without an error, so the port field keeps the keyboard.
         let error = [ForwardCol::Port, ForwardCol::TargetPort]
             .into_iter()
@@ -233,7 +233,7 @@ pub(super) fn scripts<'a>(ed: &'a ProfileEditor, ssh: &'a SshOpts, look: Look) -
         ]
         .spacing(6)
         .align_y(Alignment::Center);
-        rows = rows.push(forms::list_row(FieldId::Scripts, i, cells.into()));
+        rows = rows.push(forms::list_row(look, FieldId::Scripts, i, cells.into()));
     }
     let add = iced::widget::button(text("+ Add").size(13))
         .padding([2, 8])

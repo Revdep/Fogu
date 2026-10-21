@@ -232,7 +232,7 @@ pub fn resolve(family: &str, fallbacks: &[String]) -> (ResolvedFont, Vec<String>
     }
     let db = system.raw().db();
     let mut problems = Vec::new();
-    for fallback in fallbacks {
+    for fallback in fallbacks.iter().filter(|f| !f.trim().is_empty()) {
         match find_face(db, fallback) {
             Some(found) if found.exact => log_face("fallback font", fallback, db, &found),
             _ => {
@@ -292,6 +292,25 @@ fn log_face(what: &str, requested: &str, db: &Database, found: &Found) {
 
 /// Explicit lookup of `family` (or fontdb's monospace family for `monospace`), else the first
 /// monospace face in the database.
+/// The installed monospace families (no emoji fonts), sorted, after the generic "monospace".
+pub fn monospace_families() -> Vec<String> {
+    let mut system = font_system()
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut names: Vec<String> = system
+        .raw()
+        .db()
+        .faces()
+        .filter(|face| face.monospaced && !face.post_script_name.contains("Emoji"))
+        .filter_map(|face| face.families.first().map(|(name, _)| name.clone()))
+        .collect();
+    names.sort_unstable_by_key(|n| n.to_lowercase());
+    names.dedup();
+    std::iter::once("monospace".to_owned())
+        .chain(names)
+        .collect()
+}
+
 fn find_face(db: &Database, family: &str) -> Option<Found> {
     let wanted = if family.eq_ignore_ascii_case("monospace") {
         fontdb::Family::Monospace
@@ -464,5 +483,11 @@ mod tests {
     #[test]
     fn twelve_points_is_sixteen_pixels() {
         assert!((FontSpec::default().size_px() - 16.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn blank_fallback_font_names_are_ignored() {
+        let (_, notes) = resolve("monospace", &[String::new(), "   ".to_owned()]);
+        assert!(notes.iter().all(|note| !note.contains("Fallback font")));
     }
 }

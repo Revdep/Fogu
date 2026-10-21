@@ -1,12 +1,13 @@
-//! The tab bar (stock iced widgets): one header per tab with title, close `×` (hover/active),
-//! colour underline; `+` right after them, pinned at the right edge once they overflow and
-//! scroll horizontally (vertical wheel included).
+//! The tab bar (stock iced widgets, Nocturne): the active header merges into the terminal below
+//! (rounded top, concave flares at its feet), inactive ones are hover pills; each shows its tab
+//! colour as a dot, the title and, on hover, a close `×`. `+` follows them, pinned at the
+//! right edge once they overflow and scroll horizontally (vertical wheel included).
 
 use fogu_core::Action;
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{
-    Id, Row, button, column, container, mouse_area, row, scrollable, space, text, text_input,
-    tooltip,
+    Id, Row, button, column, container, image, mouse_area, row, scrollable, space, stack, text,
+    text_input, tooltip,
 };
 use iced::{Alignment, Color, Element, Length};
 
@@ -15,21 +16,30 @@ use crate::drag::{DragMsg, Payload};
 use crate::icons::{Icon, icon};
 use crate::lifecycle::{warning_detail, warning_title};
 use crate::message::{Message, WindowCmd};
-use crate::palette::{Look, mix};
+use crate::palette::Look;
 use crate::tab::{Tab, TabId};
+use crate::tokens::{self as t, alpha};
 
-/// Header width in logical px.
+/// Header slot width in logical px (the active header's flares included).
+/// shortcut: one width for every header (the design flexes 110–220), as the drag targets assume
+/// a fixed stride.
 pub const TAB_W: f32 = 200.0;
-/// A header plus the 1 px between headers (drag targets in the bar).
-pub const TAB_STRIDE: f32 = TAB_W + 1.0;
+/// A header plus the 2 px between headers (drag targets in the bar).
+pub const TAB_STRIDE: f32 = TAB_W + 2.0;
 /// Height of the bar (it is the window's title bar).
-pub const BAR_H: f32 = 36.0;
+pub const BAR_H: f32 = 40.0;
+/// Room between the bar's left end (after [`TRAFFIC_LIGHTS_W`]) and the first header.
+pub const STRIP_PAD: f32 = 10.0;
 /// macOS: room at the bar's left end for the native window buttons (the title bar is hidden).
-pub const TRAFFIC_LIGHTS_W: f32 = 80.0;
+pub const TRAFFIC_LIGHTS_W: f32 = 78.0;
 /// Titles longer than this many characters end in `…`.
 const MAX_TITLE_CHARS: usize = 20;
-/// Height of the colour / active underline.
-const UNDERLINE_H: f32 = 2.0;
+/// The active header: its height and the size of the concave flares at its feet.
+const ACTIVE_H: f32 = 34.0;
+const FLARE: f32 = 9.0;
+/// Inactive headers: a pill this tall, [`PILL_LIFT`] above the bar's bottom.
+const PILL_H: f32 = 28.0;
+const PILL_LIFT: f32 = 4.0;
 const TITLE_SIZE: f32 = 13.0;
 /// Width of the window's resize edges.
 const EDGE: f32 = 5.0;
@@ -39,6 +49,33 @@ const WARN: Color = Color::from_rgb(0.96, 0.65, 0.14);
 pub const RENAME_INPUT: &str = "fogu-rename-input";
 /// Id of the scrollable tab strip.
 pub const TAB_STRIP: &str = "fogu-tab-strip";
+
+/// Total width of `count` fixed-width headers and their gaps.
+pub(crate) fn headers_width(count: usize) -> f32 {
+    if count == 0 {
+        0.0
+    } else {
+        crate::metrics::cells_f32(count) * TAB_STRIDE - 2.0
+    }
+}
+
+/// Width available to the scrollable headers after the bar's fixed controls.
+pub(crate) fn strip_width(width: f32, inset: f32, toggles: usize, tabs: usize) -> f32 {
+    let window_buttons = if cfg!(target_os = "macos") {
+        6.0
+    } else {
+        13.0 + 3.0 * 44.0
+    };
+    let others = inset
+        + STRIP_PAD
+        + 4.0
+        + 28.0
+        + 22.0
+        + crate::metrics::cells_f32(toggles) * 32.0
+        + 2.0
+        + window_buttons;
+    headers_width(tabs).min((width - others).max(0.0))
+}
 
 /// An inline rename in progress.
 #[derive(Clone, Debug)]
@@ -62,8 +99,12 @@ pub struct TabBar<'a> {
     pub forwards: Option<usize>,
     /// The profile sidebar is open (its toggle button is highlighted).
     pub profiles: bool,
+    /// The settings tab is the active one (its button is highlighted).
+    pub settings: bool,
     /// Empty room before the headers ([`TRAFFIC_LIGHTS_W`] on macOS).
     pub inset: f32,
+    /// The window's width.
+    pub width: f32,
 }
 
 /// `title` cut to [`MAX_TITLE_CHARS`] characters, ending in `…` when cut.
@@ -85,10 +126,15 @@ fn solid<'a>(color: Color, width: Length, height: f32) -> Element<'a, Message> {
 }
 
 impl<'a> TabBar<'a> {
+    #[expect(clippy::too_many_lines, reason = "one widget tree, top to bottom")]
     fn header(&self, tab: &'a Tab) -> Element<'a, Message> {
-        let (bg, fg) = (self.look.base, self.look.fg);
+        let look = self.look;
         let active = tab.id == self.active;
         let hovered = self.hovered == Some(tab.id);
+        let fg = match (active, hovered) {
+            (true, _) | (false, true) => look.fg,
+            (false, false) => look.dim,
+        };
         let title: Element<'a, Message> = match self.renaming {
             Some(rename) if rename.tab == tab.id => text_input("Tab title", &rename.value)
                 .id(Id::new(RENAME_INPUT))
@@ -99,20 +145,19 @@ impl<'a> TabBar<'a> {
                 .into(),
             _ => text(truncate(tab.title()))
                 .size(TITLE_SIZE)
-                .color(if active { fg } else { mix(fg, bg, 0.4) })
+                .color(fg)
                 .wrapping(text::Wrapping::None)
                 .width(Length::Fill)
                 .into(),
         };
-        let close: Element<'a, Message> = if active || hovered {
-            let look = self.look;
-            button(icon(Icon::Close, 10.0, fg))
+        let close: Element<'a, Message> = if hovered {
+            button(icon(Icon::Close, 13.0, fg))
                 .width(20)
                 .height(20)
                 .padding(0)
                 .style(move |_theme: &iced::Theme, status| {
                     let mut style = hover_style(look, status, false);
-                    style.border = iced::Border::default().rounded(3);
+                    style.border = iced::Border::default().rounded(5);
                     style
                 })
                 .on_press(Message::CloseTab(tab.id))
@@ -120,34 +165,73 @@ impl<'a> TabBar<'a> {
         } else {
             space().width(20).into()
         };
-        let title = match warning_badge(tab) {
-            Some(badge) => row![badge, title]
-                .spacing(6)
+        // The tab colour, when the tab or its profile has one, as a small dot before the title.
+        let mut content = row![].spacing(8).align_y(Alignment::Center);
+        if let Some(color) = tab.color.map(to_iced) {
+            content = content.push(container(space()).width(7).height(7).style(
+                move |_theme: &iced::Theme| {
+                    container::background(color).border(iced::Border::default().rounded(3.5))
+                },
+            ));
+        }
+        if let Some(badge) = warning_badge(tab) {
+            content = content.push(badge);
+        }
+        let content = content.push(title).push(close);
+        let body: Element<'a, Message> = if active {
+            let ground = look.base;
+            let face = container(content)
+                .padding(iced::Padding {
+                    top: 0.0,
+                    right: 8.0,
+                    bottom: 0.0,
+                    left: 12.0,
+                })
+                .height(ACTIVE_H)
+                .width(Length::Fill)
                 .align_y(Alignment::Center)
-                .into(),
-            None => title,
-        };
-        let underline = match tab.color {
-            Some(color) => to_iced(color),
-            None if active => self.look.accent,
-            None => Color::TRANSPARENT,
-        };
-        let header_bg = match (active, hovered) {
-            (true, _) => bg,
-            (false, true) => mix(self.look.raised, fg, 0.08),
-            (false, false) => self.look.raised,
-        };
-        let content = column![
-            container(row![title, close].spacing(6).align_y(Alignment::Center))
-                .padding([0, 12])
-                .height(BAR_H - UNDERLINE_H)
+                .style(move |_theme: &iced::Theme| {
+                    container::background(ground).border(iced::Border {
+                        radius: iced::border::Radius::default()
+                            .top_left(t::R_TAB)
+                            .top_right(t::R_TAB),
+                        ..iced::Border::default()
+                    })
+                });
+            row![flare(ground, true), face, flare(ground, false)]
+                .align_y(Alignment::End)
+                .width(TAB_W)
+                .height(BAR_H)
+                .into()
+        } else {
+            let fill = hovered.then_some(alpha(look.fg, 0.08));
+            let pill = container(content)
+                .padding(iced::Padding {
+                    top: 0.0,
+                    right: 8.0,
+                    bottom: 0.0,
+                    left: 12.0,
+                })
+                .height(PILL_H)
+                .width(Length::Fill)
                 .align_y(Alignment::Center)
-                .width(Length::Fill),
-            solid(underline, Length::Fill, UNDERLINE_H),
-        ];
-        let body = container(content)
-            .width(TAB_W)
-            .style(move |_theme: &iced::Theme| container::background(header_bg));
+                .style(move |_theme: &iced::Theme| container::Style {
+                    background: fill.map(Into::into),
+                    border: iced::Border::default().rounded(t::R_BTN),
+                    ..container::Style::default()
+                });
+            container(pill)
+                .padding(iced::Padding {
+                    top: 0.0,
+                    right: 4.0,
+                    bottom: PILL_LIFT,
+                    left: 4.0,
+                })
+                .width(TAB_W)
+                .height(BAR_H)
+                .align_y(Alignment::End)
+                .into()
+        };
         mouse_area(body)
             .on_press(Message::Drag(DragMsg::Start(Payload::Tab(tab.id))))
             .on_middle_press(Message::CloseTab(tab.id))
@@ -160,18 +244,19 @@ impl<'a> TabBar<'a> {
 
     /// The bar: scrollable headers with `+` / `▾` after them (their empty rest moves the
     /// window), the panel toggles, then the window buttons.
+    #[expect(clippy::too_many_lines, reason = "one widget tree, left to right")]
     pub fn view(self) -> Element<'a, Message> {
         let look = self.look;
-        let plus = icon_button(Icon::Plus, 36.0, look, Message::Action(Action::NewTab));
+        let plus = square_button(Icon::Plus, 28.0, look, Message::Action(Action::NewTab));
         // Right-click on `+` or the chevron next to it: the profile picker.
         let plus = mouse_area(plus).on_right_press(Message::Action(Action::OpenProfilePicker));
-        let picker = icon_button(
+        let picker = square_button(
             Icon::ChevronDown,
-            28.0,
+            22.0,
             look,
             Message::Action(Action::OpenProfilePicker),
         );
-        let headers = Row::with_children(self.tabs.iter().map(|tab| self.header(tab))).spacing(1);
+        let headers = Row::with_children(self.tabs.iter().map(|tab| self.header(tab))).spacing(2);
         let scroller = Scrollbar::new().width(2).scroller_width(2);
         let strip = scrollable(headers)
             .id(Id::new(TAB_STRIP))
@@ -179,16 +264,22 @@ impl<'a> TabBar<'a> {
             .on_scroll(Message::TabStripViewport)
             .width(Length::Fill);
         // As wide as the headers when they fit (so `+` follows the last one), else whatever the
-        // bar leaves after `+` and the buttons; the tiny spacer portion takes the rest.
-        let strip = container(strip)
-            .width(Length::FillPortion(1000))
-            .max_width(crate::metrics::cells_f32(self.tabs.len()) * TAB_STRIDE);
+        // bar leaves after `+` and the buttons. Computed, as a `Fill` child of a row is never
+        // narrower than its share (iced 0.14), whatever its `max_width`.
+        let toggles = usize::from(self.forwards.is_some()) + usize::from(self.sftp.is_some()) + 2;
+        let strip = container(strip).width(strip_width(
+            self.width,
+            self.inset,
+            toggles,
+            self.tabs.len(),
+        ));
         let tabs = row![
-            space().width(self.inset),
+            space().width(self.inset + STRIP_PAD),
             strip,
+            space().width(4),
             plus,
             picker,
-            space().width(Length::FillPortion(1))
+            space().width(Length::Fill)
         ]
         .align_y(Alignment::Center)
         .width(Length::Fill);
@@ -199,24 +290,44 @@ impl<'a> TabBar<'a> {
             .on_double_click(Message::Window(WindowCmd::ToggleMaximize))
             .on_right_press(Message::TabBarMenu)
             .on_scroll(Message::TabBarWheel);
-        let toggle = |glyph: Icon, on: bool, tip: String, message| {
-            let color = if on { look.accent } else { look.fg };
+        let toggle = |glyph: Icon, on: bool, badge: Option<usize>, tip: String, message| {
+            let color = if on { look.accent_hi } else { look.dim };
             let button = button(icon(glyph, 16.0, color))
-                .width(36)
-                .height(BAR_H)
+                .width(30)
+                .height(30)
                 .padding(0)
-                .style(move |_theme: &iced::Theme, status| hover_style(look, status, false))
+                .style(move |_theme: &iced::Theme, status| {
+                    let mut style = hover_style(look, status, false);
+                    if on {
+                        style.background = Some(alpha(look.accent, 0.14).into());
+                    }
+                    style.border = iced::Border::default().rounded(t::R_BTN);
+                    style
+                })
                 .on_press(message);
+            let button: Element<'a, Message> = match badge {
+                Some(count) => stack![
+                    button,
+                    container(count_badge(count))
+                        .width(30)
+                        .height(30)
+                        .align_x(Alignment::End)
+                        .align_y(Alignment::Start)
+                ]
+                .into(),
+                None => button.into(),
+            };
             let tip = container(text(tip).size(12))
                 .padding(4)
                 .style(container::rounded_box);
             tooltip(button, tip, tooltip::Position::Bottom)
         };
-        let mut bar_row = row![tabs].align_y(Alignment::Center);
+        let mut bar_row = row![tabs].spacing(2).align_y(Alignment::Center);
         if let Some(count) = self.forwards {
             bar_row = bar_row.push(toggle(
                 Icon::Ports,
                 count > 0,
+                (count > 0).then_some(count),
                 format!("Port forwarding ({count} listening)"),
                 Message::Forwards(crate::forwards_dialog::ForwardsMsg::Open),
             ));
@@ -225,6 +336,7 @@ impl<'a> TabBar<'a> {
             bar_row = bar_row.push(toggle(
                 Icon::Folder,
                 open,
+                None,
                 "SFTP panel (toggle-sftp)".to_owned(),
                 Message::Action(Action::ToggleSftp),
             ));
@@ -232,34 +344,23 @@ impl<'a> TabBar<'a> {
         bar_row = bar_row.push(toggle(
             Icon::Sidebar,
             self.profiles,
+            None,
             "Profiles (toggle-profiles)".to_owned(),
             Message::Action(Action::ToggleProfiles),
         ));
+        bar_row = bar_row.push(toggle(
+            Icon::Gear,
+            self.settings,
+            None,
+            "Settings (open-settings)".to_owned(),
+            Message::Action(Action::OpenSettings),
+        ));
         // macOS: the native title bar has the window buttons.
-        if !cfg!(target_os = "macos") {
-            bar_row = bar_row
-                .push(space().width(8))
-                .push(solid(look.border, Length::Fixed(1.0), 18.0))
-                .push(space().width(8))
-                .push(window_button(
-                    Icon::Minimize,
-                    look,
-                    false,
-                    Message::Window(WindowCmd::Minimize),
-                ))
-                .push(window_button(
-                    Icon::Maximize,
-                    look,
-                    false,
-                    Message::Window(WindowCmd::ToggleMaximize),
-                ))
-                .push(window_button(
-                    Icon::Close,
-                    look,
-                    true,
-                    Message::CloseRequested,
-                ));
-        }
+        bar_row = if cfg!(target_os = "macos") {
+            bar_row.push(space().width(6))
+        } else {
+            bar_row.push(window_buttons(look))
+        };
         let bar = container(bar_row)
             .width(Length::Fill)
             .height(BAR_H)
@@ -268,14 +369,48 @@ impl<'a> TabBar<'a> {
     }
 }
 
-/// Flat chrome button colours: `hover` on hover, `danger` (white text) for the close button.
+/// The count on the Ports button: a small accent pill.
+fn count_badge<'a>(count: usize) -> Element<'a, Message> {
+    container(text(count.to_string()).size(8.5).color(t::A100))
+        .padding([0, 4])
+        .height(12)
+        .align_y(Alignment::Center)
+        .style(|_theme: &iced::Theme| {
+            container::background(t::A800).border(iced::Border::default().rounded(999))
+        })
+        .into()
+}
+
+/// A divider, then Minimize, Maximize and Close.
+fn window_buttons<'a>(look: Look) -> Element<'a, Message> {
+    row![
+        space().width(6),
+        solid(look.border, Length::Fixed(1.0), 18.0),
+        space().width(6),
+        window_button(
+            Icon::Minimize,
+            look,
+            false,
+            Message::Window(WindowCmd::Minimize),
+        ),
+        window_button(
+            Icon::Maximize,
+            look,
+            false,
+            Message::Window(WindowCmd::ToggleMaximize),
+        ),
+        window_button(Icon::Close, look, true, Message::CloseRequested),
+    ]
+    .align_y(Alignment::Center)
+    .into()
+}
+
+/// Flat chrome button colours: `hover` on hover, `danger` (light text) for the close button.
 pub(crate) fn hover_style(look: Look, status: button::Status, danger: bool) -> button::Style {
     let (background, text_color) = match status {
-        button::Status::Hovered | button::Status::Pressed if danger => {
-            (Some(look.danger), Color::WHITE)
-        }
+        button::Status::Hovered | button::Status::Pressed if danger => (Some(look.danger), t::N100),
         button::Status::Hovered => (Some(look.hover), look.fg),
-        button::Status::Pressed => (Some(Color { a: 0.18, ..look.fg }), look.fg),
+        button::Status::Pressed => (Some(alpha(look.fg, 0.13)), look.fg),
         _ => (None, look.fg),
     };
     button::Style {
@@ -285,30 +420,63 @@ pub(crate) fn hover_style(look: Look, status: button::Status, danger: bool) -> b
     }
 }
 
-/// A flat bar button `width` px wide with a 16 px icon.
-fn icon_button<'a>(glyph: Icon, width: f32, look: Look, message: Message) -> Element<'a, Message> {
-    button(icon(glyph, 16.0, look.fg))
+/// A `width` × 28 bar button, radius 7, with a 16 px icon.
+fn square_button<'a>(
+    glyph: Icon,
+    width: f32,
+    look: Look,
+    message: Message,
+) -> Element<'a, Message> {
+    button(icon(glyph, 16.0, look.dim))
         .width(width)
-        .height(BAR_H)
+        .height(28)
         .padding(0)
-        .style(move |_theme: &iced::Theme, status| hover_style(look, status, false))
+        .style(move |_theme: &iced::Theme, status| {
+            let mut style = hover_style(look, status, false);
+            style.border = iced::Border::default().rounded(t::R_BTN);
+            style
+        })
         .on_press(message)
         .into()
 }
 
-/// Minimize / maximize / close at the bar's right end (close turns white on red).
+/// Minimize / maximize / close at the bar's right end (close turns light on red). The icon
+/// follows the button's text colour, so the close glyph lights up with its red hover.
 fn window_button<'a>(
     glyph: Icon,
     look: Look,
     danger: bool,
     message: Message,
 ) -> Element<'a, Message> {
-    button(icon(glyph, 16.0, look.fg))
-        .width(46)
-        .height(BAR_H)
-        .padding(0)
-        .style(move |_theme: &iced::Theme, status| hover_style(look, status, danger))
-        .on_press(message)
+    button(
+        container(
+            text(glyph.glyph())
+                .font(crate::icons::PHOSPHOR)
+                .size(15)
+                .line_height(1.0),
+        )
+        .center(Length::Fill),
+    )
+    .width(44)
+    .height(BAR_H)
+    .padding(0)
+    .style(move |_theme: &iced::Theme, status| {
+        let mut style = hover_style(look, status, danger);
+        if !matches!(status, button::Status::Hovered | button::Status::Pressed) {
+            style.text_color = look.dim;
+        }
+        style
+    })
+    .on_press(message)
+    .into()
+}
+
+/// One concave flare at the active header's foot: a [`FLARE`]-px square of `color` with a
+/// quarter circle cut out of its top outer corner, so the header curves into the content.
+fn flare<'a>(color: Color, left: bool) -> Element<'a, Message> {
+    image(crate::icons::notch(color, FLARE, !left, false))
+        .width(FLARE)
+        .height(FLARE)
         .into()
 }
 

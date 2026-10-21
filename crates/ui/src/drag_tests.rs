@@ -36,6 +36,22 @@ fn insertion_index_picks_the_nearest_gap() {
     assert_eq!(insertion_index(s * 10.0, 3), 3);
 }
 
+#[test]
+fn strip_geometry_applies_scroll_and_rejects_controls() {
+    let viewport = Rectangle::new(Point::new(20.0, 0.0), iced::Size::new(300.0, BAR_H));
+    assert_eq!(
+        strip_position(Point::new(70.0, 10.0), viewport, TAB_STRIDE),
+        Some(TAB_STRIDE + 50.0)
+    );
+    assert_eq!(strip_position(Point::new(19.0, 10.0), viewport, 0.0), None);
+    assert_eq!(
+        strip_position(Point::new(321.0, 10.0), viewport, 0.0),
+        None,
+        "the + and right-side controls are outside the strip"
+    );
+    assert_eq!(strip_position(Point::new(70.0, BAR_H), viewport, 0.0), None);
+}
+
 fn app() -> App {
     let runtime = Arc::new(SessionRuntime::new().unwrap());
     let resolved = ResolvedFont {

@@ -1,4 +1,4 @@
-//! Terminal colour schemes. Four built-ins are embedded from `assets/schemes/*.toml`
+//! Terminal colour schemes. Six built-ins are embedded from `assets/schemes/*.toml`
 //! (`ColorScheme::by_name`): schemes are data files, not code. Custom scheme files are not
 //! supported yet.
 
@@ -94,21 +94,23 @@ pub struct ColorScheme {
     pub ansi: [RgbColor; 16],
 }
 
-/// The 4 built-in schemes, parsed once from the embedded TOML assets.
-static BUILTINS: LazyLock<[ColorScheme; 4]> = LazyLock::new(load_builtins);
+/// The 6 built-in schemes, parsed once from the embedded TOML assets.
+static BUILTINS: LazyLock<[ColorScheme; 6]> = LazyLock::new(load_builtins);
 
 #[expect(
     clippy::expect_used,
     reason = "the asset strings are compile-time-embedded and fixed; a typo in one is a build-\
-              time bug caught immediately by `four_builtins_with_distinct_names` and every other \
+              time bug caught immediately by `six_builtins_with_distinct_names` and every other \
               test in this module, never a runtime failure mode for users"
 )]
-fn load_builtins() -> [ColorScheme; 4] {
-    const SOURCES: [&str; 4] = [
+fn load_builtins() -> [ColorScheme; 6] {
+    const SOURCES: [&str; 6] = [
         include_str!("../../../assets/schemes/fogu-dark.toml"),
         include_str!("../../../assets/schemes/fogu-light.toml"),
         include_str!("../../../assets/schemes/solarized-dark.toml"),
         include_str!("../../../assets/schemes/dracula.toml"),
+        include_str!("../../../assets/schemes/nocturne.toml"),
+        include_str!("../../../assets/schemes/catppuccin-mocha.toml"),
     ];
     SOURCES.map(|src| toml::from_str(src).expect("builtin colour scheme asset"))
 }
@@ -192,15 +194,17 @@ mod tests {
     }
 
     #[test]
-    fn four_builtins_with_distinct_names() {
+    fn six_builtins_with_distinct_names() {
         let builtins = ColorScheme::builtins();
-        assert_eq!(builtins.len(), 4);
+        assert_eq!(builtins.len(), 6);
         let names: Vec<&str> = builtins.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(
             names.iter().collect::<std::collections::HashSet<_>>().len(),
-            4
+            6
         );
         assert!(ColorScheme::by_name("Dracula").is_some());
+        assert!(ColorScheme::by_name("Nocturne").is_some());
+        assert!(ColorScheme::by_name("Catppuccin Mocha").is_some());
         assert!(ColorScheme::by_name("nonexistent scheme").is_none());
     }
 }

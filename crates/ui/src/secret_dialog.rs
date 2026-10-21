@@ -111,10 +111,10 @@ pub(crate) fn view(dialog: &SecretDialog) -> Element<'_, Message> {
         input,
         row![
             button(text("Save"))
-                .style(button::primary)
+                .style(crate::style::primary)
                 .on_press(Message::SecretDialog(SecretMsg::Save)),
             button(text("Cancel"))
-                .style(button::secondary)
+                .style(crate::style::secondary)
                 .on_press(Message::SecretDialog(SecretMsg::Cancel)),
         ]
         .spacing(8),

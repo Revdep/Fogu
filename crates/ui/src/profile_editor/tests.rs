@@ -64,6 +64,47 @@ fn config_text(t: &crate::profiles::tests::Tmp) -> String {
     std::fs::read_to_string(t.0.join("config.toml")).unwrap()
 }
 
+#[test]
+fn number_stepper_steps_and_clamps_profile_fields() {
+    let profile = Profile {
+        kind: ProfileKind::Ssh(SshOpts {
+            port: Some(u16::MAX),
+            ..SshOpts::default()
+        }),
+        ..Profile::default_shell()
+    };
+    let mut editor = ProfileEditor::new(profile, Source::New);
+    assert_eq!(
+        editor.apply(FieldId::Port, V::Step(1)),
+        fields::Effect::None
+    );
+    let ProfileKind::Ssh(ssh) = &editor.draft.kind else {
+        panic!("ssh profile")
+    };
+    assert_eq!(ssh.port, Some(u16::MAX));
+
+    let _ = editor.apply(FieldId::Port, V::Step(-1));
+    let ProfileKind::Ssh(ssh) = &editor.draft.kind else {
+        panic!("ssh profile")
+    };
+    assert_eq!(ssh.port, Some(u16::MAX - 1));
+}
+
+#[test]
+fn stepping_an_inherited_number_starts_from_its_default() {
+    let profile = Profile {
+        kind: ProfileKind::Ssh(SshOpts::default()),
+        ..Profile::default_shell()
+    };
+    let mut editor = ProfileEditor::new(profile, Source::New);
+    let _ = editor.apply(FieldId::Port, V::Step(1));
+    let _ = editor.apply(FieldId::Weight, V::Step(-1));
+    let ProfileKind::Ssh(ssh) = &editor.draft.kind else {
+        panic!("ssh profile")
+    };
+    assert_eq!((ssh.port, ssh.weight), (Some(23), Some(-1)));
+}
+
 /// Sets every SSH field through the reducer; the expected struct names every field (no `..`),
 /// so a new `SshOpts` field fails to compile here until the editor handles it.
 #[test]
@@ -457,6 +498,29 @@ fn ssh_config_hosts_open_read_only_and_can_be_copied() {
 }
 
 #[test]
+fn expanding_a_read_only_colour_card_does_not_copy_the_profile() {
+    let t = tmp();
+    let mut app = app_in(&t.0);
+    app.profiles.ssh_hosts.profiles.push(Profile {
+        id: ProfileId("ssh-config:nas".into()),
+        name: "nas".into(),
+        kind: ProfileKind::Ssh(SshOpts::default()),
+        ..Profile::default_shell()
+    });
+    profiles(
+        &mut app,
+        ProfilesMsg::Edit(ProfileId("ssh-config:nas".into())),
+    );
+    let before = config_text(&t);
+    let profiles = app.config.profiles.len();
+    field(&mut app, FieldId::Color, V::Expand);
+    assert!(editor(&app).read_only());
+    assert!(editor(&app).expanded.contains(&FieldId::Color));
+    assert_eq!(app.config.profiles.len(), profiles);
+    assert_eq!(config_text(&t), before);
+}
+
+#[test]
 fn new_group_from_the_editor_is_added_and_picked() {
     let t = tmp();
     let mut app = app_in(&t.0);
@@ -692,4 +756,16 @@ fn right_click_on_a_text_field_opens_copy_and_paste() {
         !app.menu.as_ref().unwrap().items[0].enabled,
         "nothing to copy"
     );
+}
+
+#[test]
+fn changes_list_only_the_edited_leaves_as_toml() {
+    let mut ed = ProfileEditor::new(Profile::default_shell(), Source::New);
+    assert_eq!(ed.changes(), []);
+    ed.draft.name = "Work".to_owned();
+    ed.draft.color = Some(fogu_core::RgbColor::from_hex(0x91_84d9));
+    let changes = ed.changes();
+    let keys: Vec<&str> = changes.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(keys, ["color", "name"]);
+    assert!(changes.contains(&("name".to_owned(), "\"Work\"".to_owned())));
 }

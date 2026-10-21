@@ -123,7 +123,7 @@ fn view(search: &Search, look: Look) -> Element<'_, Message> {
         bar = bar.push(text("No matches").size(12).color(look.danger));
     }
     // `icon` fills the space it is given: a fixed size keeps the bar small.
-    let close = button(icon(Icon::Close, 10.0, look.fg))
+    let close = button(icon(Icon::Close, 13.0, look.fg))
         .width(22)
         .height(22)
         .padding(0)

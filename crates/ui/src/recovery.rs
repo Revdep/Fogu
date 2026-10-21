@@ -59,6 +59,45 @@ impl Recovery {
     }
 }
 
+/// The lock file the first running Fogu holds in the state directory.
+const INSTANCE_LOCK: &str = "instance.lock";
+
+/// Result of trying to become the one window that restores and saves tabs.
+#[derive(Debug)]
+pub(crate) enum InstanceClaim {
+    /// This window owns the lock until the file is dropped.
+    Owner(std::fs::File),
+    /// Another window owns the lock.
+    Other,
+    /// Ownership could not be established safely.
+    Unconfirmed,
+}
+
+/// Tries to become the first Fogu running. The lock is released when its file is closed, also
+/// on a crash; an unusable lock is never treated as ownership.
+pub(crate) fn claim_first(dir: &Path) -> InstanceClaim {
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(dir.join(INSTANCE_LOCK));
+    let file = match file {
+        Ok(file) => file,
+        Err(err) => {
+            tracing::warn!(error = %err, "instance lock not opened");
+            return InstanceClaim::Unconfirmed;
+        }
+    };
+    match file.try_lock() {
+        Ok(()) => InstanceClaim::Owner(file),
+        Err(std::fs::TryLockError::WouldBlock) => InstanceClaim::Other,
+        Err(std::fs::TryLockError::Error(err)) => {
+            tracing::warn!(error = %err, "instance lock not taken");
+            InstanceClaim::Unconfirmed
+        }
+    }
+}
+
 fn now_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -202,7 +241,7 @@ impl App {
 
     /// The layout as it would be saved now (profile editor tabs are not saved).
     fn session_state(&self, recovery: &Recovery) -> RecoveryState {
-        let saved: Vec<&Tab> = self.tabs.iter().filter(|t| t.editor.is_none()).collect();
+        let saved: Vec<&Tab> = self.tabs.iter().filter(|t| !t.is_page()).collect();
         let tabs = saved
             .iter()
             .map(|tab| {

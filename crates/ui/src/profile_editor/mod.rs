@@ -14,6 +14,46 @@ mod view;
 mod view_lists;
 mod view_ssh;
 
+/// `key = value` lines for every leaf of `new` that differs from `old` (see
+/// [`ProfileEditor::changes`]).
+fn changes(old: &Profile, new: &Profile) -> Vec<(String, String)> {
+    fn flatten(prefix: &str, value: toml::Value, out: &mut BTreeMap<String, toml::Value>) {
+        match value {
+            toml::Value::Table(table) => {
+                for (key, value) in table {
+                    let key = if prefix.is_empty() {
+                        key
+                    } else {
+                        format!("{prefix}.{key}")
+                    };
+                    flatten(&key, value, out);
+                }
+            }
+            leaf => {
+                out.insert(prefix.to_owned(), leaf);
+            }
+        }
+    }
+    let leaves = |p: &Profile| {
+        let mut out = BTreeMap::new();
+        if let Ok(value) = toml::Value::try_from(p) {
+            flatten("", value, &mut out);
+        }
+        out
+    };
+    let (old, new) = (leaves(old), leaves(new));
+    let keys: std::collections::BTreeSet<&String> = old.keys().chain(new.keys()).collect();
+    keys.into_iter()
+        .filter(|k| old.get(*k) != new.get(*k))
+        .map(|k| {
+            let value = new
+                .get(k)
+                .map_or_else(|| "(default)".to_owned(), ToString::to_string);
+            (k.clone(), value)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests;
 
@@ -66,6 +106,10 @@ pub struct ProfileEditor {
     pub picker: Result<(), &'static str>,
     /// What the Secret Service holds for the password and each private key (existence only).
     pub stored: Vec<StoredEntry>,
+    /// The section last picked in the left nav (it is highlighted).
+    pub section: usize,
+    /// Colour fields showing the full picker.
+    pub expanded: std::collections::BTreeSet<FieldId>,
 }
 
 impl ProfileEditor {
@@ -94,12 +138,20 @@ impl ProfileEditor {
             picker: Ok(()),
             stored: Vec::new(),
             title: String::new(),
+            section: 0,
+            expanded: std::collections::BTreeSet::new(),
         }
     }
 
     /// Unsaved changes.
     pub fn dirty(&self) -> bool {
         self.draft != self.original
+    }
+
+    /// The draft's values that differ from the original, as `key = value` TOML lines (dotted
+    /// keys; a removed value reads `key = (default)`).
+    pub fn changes(&self) -> Vec<(String, String)> {
+        changes(&self.original, &self.draft)
     }
 
     /// Read-only (a `~/.ssh/config` host).

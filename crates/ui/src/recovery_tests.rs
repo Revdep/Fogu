@@ -1,4 +1,9 @@
-#![expect(clippy::unwrap_used, clippy::indexing_slicing, reason = "tests")]
+#![expect(
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    reason = "tests"
+)]
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -7,7 +12,8 @@ use fogu_core::recovery::{self, SCROLLBACK_DIR};
 use fogu_core::{Config, Profile, RgbColor, Side};
 use fogu_session::SessionRuntime;
 
-use super::Recovery;
+use super::{InstanceClaim, Recovery};
+use crate::RunOptions;
 use crate::app::App;
 use crate::metrics::{FontUnits, ResolvedFont};
 
@@ -140,5 +146,54 @@ fn an_unchanged_layout_is_not_written_again() {
         .title_override = Some("new name".to_owned());
     a.save_recovery(&mut rec, false, true);
     assert!(dir.join(recovery::SESSION_FILE).exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn only_the_first_instance_claims_the_saved_tabs() {
+    let dir = tmp("instance-lock");
+    std::fs::create_dir_all(&dir).unwrap();
+    let InstanceClaim::Owner(lock) = super::claim_first(&dir) else {
+        panic!("the first window owns the lock");
+    };
+    assert!(matches!(super::claim_first(&dir), InstanceClaim::Other));
+    drop(lock);
+    assert!(
+        matches!(super::claim_first(&dir), InstanceClaim::Owner(_)),
+        "the lock goes with the first window"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_unusable_instance_lock_never_claims_ownership() {
+    let dir = tmp("instance-lock-error");
+    assert!(matches!(
+        super::claim_first(&dir),
+        InstanceClaim::Unconfirmed
+    ));
+}
+
+#[test]
+fn no_recovery_skips_an_existing_lock_and_starts_a_default_tab() {
+    let dir = tmp("no-recovery-lock");
+    std::fs::create_dir_all(&dir).unwrap();
+    let InstanceClaim::Owner(lock) = super::claim_first(&dir) else {
+        panic!("test owns the lock");
+    };
+    let runtime = Arc::new(SessionRuntime::new().unwrap());
+    let (app, _task) = App::boot(
+        runtime,
+        Arc::new(Config::default()),
+        RunOptions {
+            state_dir: Some(dir.clone()),
+            no_recovery: true,
+            ..RunOptions::default()
+        },
+    );
+    assert!(app.instance_lock.is_none() && app.recovery.is_none());
+    assert_eq!(app.tabs.len(), 1);
+    assert!(app.tabs[0].welcome.is_none() && !app.tabs[0].panes.is_empty());
+    drop(lock);
     let _ = std::fs::remove_dir_all(&dir);
 }

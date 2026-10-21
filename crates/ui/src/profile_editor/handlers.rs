@@ -27,6 +27,8 @@ pub enum EditorMsg {
     Save,
     /// Cancel / Close: drop the draft and close the tab.
     Cancel,
+    /// The left nav: show section `.0`.
+    Section(usize),
     /// Ask to delete the stored profile (the sidebar's confirmation dialog).
     Delete,
     /// Read-only `~/.ssh/config` host: save it as a stored profile and edit that.
@@ -37,6 +39,65 @@ pub enum EditorMsg {
     Stored(Vec<StoredEntry>),
     /// Set / Clear of a stored secret finished (`Err` = why not).
     StoreDone(Result<(), String>),
+}
+
+/// Scrolls the editor page so section `i` is at the top: one pass finds where it sits in the
+/// page, the next scrolls there.
+fn scroll_to_section(i: usize) -> Task<Message> {
+    use iced::advanced::widget::operation::{Operation, Outcome, Scrollable};
+    use iced::advanced::widget::{Id, operate};
+    use iced::{Rectangle, Vector};
+
+    /// The section's top relative to the page's content.
+    struct Find {
+        page: Id,
+        section: Id,
+        content_y: Option<f32>,
+        found: Option<f32>,
+    }
+    impl Operation<f32> for Find {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<f32>)) {
+            operate(self);
+        }
+        fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
+            if id == Some(&self.section)
+                && let Some(top) = self.content_y
+            {
+                self.found = Some(bounds.y - top);
+            }
+        }
+        fn scrollable(
+            &mut self,
+            id: Option<&Id>,
+            _bounds: Rectangle,
+            content: Rectangle,
+            _translation: Vector,
+            _state: &mut dyn Scrollable,
+        ) {
+            if id == Some(&self.page) {
+                self.content_y = Some(content.y);
+            }
+        }
+        fn finish(&self) -> Outcome<f32> {
+            self.found.map_or(Outcome::None, Outcome::Some)
+        }
+    }
+    let page = Id::new(super::view::PAGE_SCROLL);
+    operate(Find {
+        page: page.clone(),
+        section: super::view::section_id(i),
+        content_y: None,
+        found: None,
+    })
+    .then(move |y| {
+        iced::widget::operation::scroll_to(
+            page.clone(),
+            iced::widget::operation::AbsoluteOffset {
+                x: None,
+                y: Some(y),
+            },
+        )
+    })
 }
 
 /// Why "Browse…" is off when no picker can open.
@@ -127,6 +188,14 @@ impl App {
         if let EditorMsg::Field(id, FieldValue::Menu(at, text)) = message {
             return self.field_menu(tab, id, at, text);
         }
+        if let EditorMsg::Field(field, FieldValue::Expand) = message {
+            if let Some(editor) = self.editor_mut(tab)
+                && !editor.expanded.remove(&field)
+            {
+                editor.expanded.insert(field);
+            }
+            return Task::none();
+        }
         // A `~/.ssh/config` host can't be changed in place: the first change copies it to the
         // user's profiles (as "Copy to my profiles" does) and applies to the copy.
         if matches!(message, EditorMsg::Field(..))
@@ -171,6 +240,12 @@ impl App {
             EditorMsg::Picked(_, None) => {}
             EditorMsg::Save => return self.save_editor(tab),
             EditorMsg::Cancel => return self.remove_tab(tab),
+            EditorMsg::Section(section) => {
+                if let Some(editor) = self.editor_mut(tab) {
+                    editor.section = section;
+                }
+                return scroll_to_section(section);
+            }
             EditorMsg::Delete => {
                 if let Some(Source::Stored(old)) = self.editor_mut(tab).map(|e| e.source.clone()) {
                     self.profiles.pending_delete = Some(old.id);
@@ -293,7 +368,7 @@ impl App {
     }
 
     /// Open panes and tabs of `profile` remember the saved version (restart, reconnect).
-    fn use_saved_profile(&mut self, profile: &Profile) {
+    pub(crate) fn use_saved_profile(&mut self, profile: &Profile) {
         for tab in &mut self.tabs {
             if tab.profile.id == profile.id {
                 tab.profile = profile.clone();
@@ -423,7 +498,7 @@ impl App {
 
     /// The active tab is an editor and nothing is in front of it: it gets keyboard shortcuts.
     pub(crate) fn editor_has_keys(&self) -> bool {
-        self.active_tab().is_some_and(|t| t.editor.is_some())
+        self.active_tab().is_some_and(Tab::is_page)
             && self.picker.is_none()
             && self.menu.is_none()
             && self.renaming.is_none()

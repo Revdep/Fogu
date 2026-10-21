@@ -108,6 +108,8 @@ pub enum Action {
     ToggleSftp,
     /// Shows/hides the profile manager sidebar.
     ToggleProfiles,
+    /// Opens the settings tab.
+    OpenSettings,
     /// Deletes the saved tab-recovery files (asks first).
     ClearSavedSessions,
     /// Opens the active tab's profile again in a new tab, in the same directory.
@@ -169,6 +171,7 @@ impl fmt::Display for Action {
             Self::OpenProfilePicker => write!(f, "open-profile-picker"),
             Self::ToggleSftp => write!(f, "toggle-sftp"),
             Self::ToggleProfiles => write!(f, "toggle-profiles"),
+            Self::OpenSettings => write!(f, "open-settings"),
             Self::ClearSavedSessions => write!(f, "clear-saved-sessions"),
             Self::DuplicateTab => write!(f, "duplicate-tab"),
             Self::CloseOtherTabs => write!(f, "close-other-tabs"),
@@ -229,6 +232,7 @@ impl FromStr for Action {
             "open-profile-picker" => Self::OpenProfilePicker,
             "toggle-sftp" => Self::ToggleSftp,
             "toggle-profiles" => Self::ToggleProfiles,
+            "open-settings" => Self::OpenSettings,
             "clear-saved-sessions" => Self::ClearSavedSessions,
             "duplicate-tab" => Self::DuplicateTab,
             "close-other-tabs" => Self::CloseOtherTabs,
@@ -352,6 +356,7 @@ impl Hotkeys {
         bindings.insert(Action::ToggleSftp, chords(&["Ctrl-Shift-O"]));
         // M = manager.
         bindings.insert(Action::ToggleProfiles, chords(&["Ctrl-Shift-M"]));
+        bindings.insert(Action::OpenSettings, chords(&["Ctrl-,"]));
         bindings.insert(Action::ClearSavedSessions, chords(&[]));
         bindings.insert(Action::DuplicateTab, chords(&[]));
         bindings.insert(Action::CloseOtherTabs, chords(&[]));
@@ -438,6 +443,7 @@ fn macos_overrides(bindings: &mut BTreeMap<Action, Vec<KeyChord>>) {
         (Action::OpenProfilePicker, &["Cmd-E"]),
         (Action::ToggleSftp, &["Cmd-Shift-O"]),
         (Action::ToggleProfiles, &["Cmd-Shift-M"]),
+        (Action::OpenSettings, &["Cmd-,"]),
     ];
     for (action, keys) in mac {
         bindings.insert(*action, chords(keys));
@@ -544,6 +550,7 @@ mod tests {
             Action::OpenProfilePicker,
             Action::ToggleSftp,
             Action::ToggleProfiles,
+            Action::OpenSettings,
             Action::ClearSavedSessions,
             Action::DuplicateTab,
             Action::CloseOtherTabs,

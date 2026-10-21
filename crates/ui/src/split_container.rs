@@ -1,5 +1,7 @@
 //! `SplitContainer`: lays a tab's panes out from its `SplitTree<PaneId>`, draws the dividers and
-//! the focused pane's border, and turns divider drags into ratio changes.
+//! the focused pane's border, and turns divider drags into ratio changes. With [`tiles`]
+//! (`SplitContainer::tiles`) the panes float as rounded tiles on the bar's ground, the focused
+//! one ringed in the accent with a glow.
 //! An optional side panel (the SFTP browser) sits right of the panes behind one more divider
 //! with the same hit area, cursor and double-click behaviour.
 
@@ -18,6 +20,9 @@ use crate::tab::{PaneId, TabId};
 
 /// Space between sibling panes; the divider line sits in its middle.
 pub const GAP: f32 = 4.0;
+/// Tiles: the space between and around them, and their corner radius.
+const TILE_GAP: f32 = 6.0;
+const TILE_R: f32 = 10.0;
 /// Width of a divider's invisible mouse hit area.
 const HIT: f32 = 8.0;
 /// Room kept around the panes for the focused pane's border.
@@ -37,6 +42,8 @@ pub struct SplitContainer<'a> {
     side: Option<f32>,
     /// The tab background under the panes.
     backdrop: Option<Backdrop>,
+    /// Tiles on this ground, the unfocused ring colour and the glow colour.
+    tiles: Option<(Color, Color, Color)>,
     /// A drag is under way: the current drop target and the highlight colour.
     drop: Option<(Option<(PaneId, Zone)>, Color)>,
 }
@@ -96,6 +103,34 @@ impl<'a> SplitContainer<'a> {
             side: None,
             backdrop: None,
             drop: None,
+            tiles: None,
+        }
+    }
+
+    /// Floating tiles: `ground` around and between the panes, rings in `ring` (focused: the
+    /// border colour, with a `glow`).
+    #[must_use]
+    pub fn tiles(mut self, ground: Color, ring: Color, glow: Color) -> Self {
+        self.tiles = Some((ground, ring, glow));
+        self
+    }
+
+    fn gap(&self) -> f32 {
+        if self.tiles.is_some() { TILE_GAP } else { GAP }
+    }
+
+    /// The area the panes share: `bounds` minus room for the border (tiles: their margin).
+    fn inner(&self, bounds: Rectangle) -> Rect {
+        let pad = if self.tiles.is_some() {
+            TILE_GAP
+        } else {
+            BORDER
+        };
+        Rect {
+            x: bounds.x + pad,
+            y: bounds.y + pad,
+            w: (bounds.width - 2.0 * pad).max(0.0),
+            h: (bounds.height - 2.0 * pad).max(0.0),
         }
     }
 
@@ -110,11 +145,12 @@ impl<'a> SplitContainer<'a> {
 
     /// The panes' area, and the side panel's area and divider.
     fn areas(&self, bounds: Rectangle) -> (Rect, Option<(Rect, Divider)>) {
-        let all = inner(bounds);
+        let all = self.inner(bounds);
         let Some(ratio) = self.side else {
             return (all, None);
         };
-        let avail = (all.w - GAP).max(0.0);
+        let gap_w = self.gap();
+        let avail = (all.w - gap_w).max(0.0);
         let side_w = (avail * ratio).round();
         let panes = Rect {
             w: avail - side_w,
@@ -122,11 +158,11 @@ impl<'a> SplitContainer<'a> {
         };
         let gap = Rect {
             x: all.x + panes.w,
-            w: GAP,
+            w: gap_w,
             ..all
         };
         let side = Rect {
-            x: gap.x + GAP,
+            x: gap.x + gap_w,
             w: side_w,
             ..all
         };
@@ -204,7 +240,7 @@ impl<'a> SplitContainer<'a> {
                 let Some(drag) = &state.drag else {
                     return false;
                 };
-                let ratio = drag.divider().ratio_at(position.x, position.y, GAP);
+                let ratio = drag.divider().ratio_at(position.x, position.y, self.gap());
                 shell.publish(match drag {
                     Drag::Split(d) => Message::SplitRatio(self.tab, d.path.clone(), ratio),
                     // `ratio` is the panes' share; the panel gets the rest.
@@ -240,7 +276,11 @@ impl<'a> SplitContainer<'a> {
     /// Every divider: the tree's, then the side panel's.
     fn dividers(&self, bounds: Rectangle) -> Vec<Drag> {
         let (panes, side) = self.areas(bounds);
-        let splits = self.tree.dividers(panes, GAP).into_iter().map(Drag::Split);
+        let splits = self
+            .tree
+            .dividers(panes, self.gap())
+            .into_iter()
+            .map(Drag::Split);
         splits.chain(side.map(|(_, d)| Drag::Side(d))).collect()
     }
 
@@ -251,7 +291,8 @@ impl<'a> SplitContainer<'a> {
     }
 }
 
-/// The area the panes share: `bounds` minus room for the border.
+/// The area the panes share in the classic look: `bounds` minus room for the border.
+#[cfg(test)]
 fn inner(bounds: Rectangle) -> Rect {
     Rect {
         x: bounds.x + BORDER,
@@ -259,6 +300,68 @@ fn inner(bounds: Rectangle) -> Rect {
         w: (bounds.width - 2.0 * BORDER).max(0.0),
         h: (bounds.height - 2.0 * BORDER).max(0.0),
     }
+}
+
+/// Rounds each tile's corners (ground-coloured notches; images draw over the layer's text), then
+/// rings them on a layer above: `border`'s pane in its colour, the others in `ring`.
+fn draw_tiles(
+    renderer: &mut iced::Renderer,
+    ground: Color,
+    ring: Color,
+    border: Option<(PaneId, Color)>,
+    tiles: &[(PaneId, Rectangle)],
+) {
+    use iced::advanced::image::{self, Renderer as _};
+    let notches = [
+        (
+            (false, false),
+            crate::icons::notch(ground, TILE_R, true, true),
+        ),
+        (
+            (true, false),
+            crate::icons::notch(ground, TILE_R, false, true),
+        ),
+        (
+            (false, true),
+            crate::icons::notch(ground, TILE_R, true, false),
+        ),
+        (
+            (true, true),
+            crate::icons::notch(ground, TILE_R, false, false),
+        ),
+    ];
+    for &(_, b) in tiles {
+        for &((right, bottom), ref handle) in &notches {
+            let at = Rectangle {
+                x: if right { b.x + b.width - TILE_R } else { b.x },
+                y: if bottom { b.y + b.height - TILE_R } else { b.y },
+                width: TILE_R,
+                height: TILE_R,
+            };
+            // The circle sits on the tile's inner side of the notch.
+            renderer.draw_image(image::Image::new(handle.clone()), at, at);
+        }
+    }
+    let all = tiles
+        .iter()
+        .map(|&(_, b)| b)
+        .reduce(|a, b| a.union(&b))
+        .unwrap_or_default()
+        .expand(2.0);
+    renderer::Renderer::with_layer(renderer, all, |renderer| {
+        for &(id, bounds) in tiles {
+            let color = match border {
+                Some((pane, color)) if pane == id => color,
+                _ => ring,
+            };
+            let quad = Quad {
+                bounds,
+                border: Border::default().rounded(TILE_R).width(1).color(color),
+                ..Quad::default()
+            };
+            renderer::Renderer::fill_quad(renderer, quad, Color::TRANSPARENT);
+        }
+    });
 }
 
 fn rectangle(r: Rect) -> Rectangle {
@@ -335,7 +438,7 @@ impl Widget<Message, iced::Theme, iced::Renderer> for SplitContainer<'_> {
     ) -> layout::Node {
         let size = limits.max();
         let (pane_area, side_area) = self.areas(Rectangle::with_size(size));
-        let rects = self.tree.layout(pane_area, GAP);
+        let rects = self.tree.layout(pane_area, self.gap());
         // Children are the panes (tagged by `ids`), then the side panel if any.
         let side_rect = side_area.map(|(r, _)| r);
         let nodes = self
@@ -473,7 +576,32 @@ impl Widget<Message, iced::Theme, iced::Renderer> for SplitContainer<'_> {
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        fill(renderer, bounds, self.background);
+        let panes = || self.ids.iter().zip(layout.children());
+        match self.tiles {
+            Some((ground, _, glow)) => {
+                fill(renderer, bounds, ground);
+                // The focused tile's glow, under the tiles.
+                if let Some((pane, _)) = self.border
+                    && let Some((_, l)) = panes().find(|(id, _)| **id == pane)
+                {
+                    let quad = Quad {
+                        bounds: l.bounds(),
+                        border: Border::default().rounded(TILE_R),
+                        shadow: iced::Shadow {
+                            color: glow,
+                            offset: Vector::ZERO,
+                            blur_radius: 28.0,
+                        },
+                        ..Quad::default()
+                    };
+                    renderer::Renderer::fill_quad(renderer, quad, self.background);
+                }
+                for (_, l) in panes() {
+                    fill(renderer, l.bounds(), self.background);
+                }
+            }
+            None => fill(renderer, bounds, self.background),
+        }
         // Children, dividers and the focused pane's border.
         let content = |renderer: &mut iced::Renderer| {
             for ((child, state), layout) in self
@@ -486,8 +614,10 @@ impl Widget<Message, iced::Theme, iced::Renderer> for SplitContainer<'_> {
                     .as_widget()
                     .draw(state, renderer, theme, style, layout, cursor, viewport);
             }
-            for drag in self.dividers(bounds) {
-                fill(renderer, across(drag.divider(), 1.0), self.divider);
+            if self.tiles.is_none() {
+                for drag in self.dividers(bounds) {
+                    fill(renderer, across(drag.divider(), 1.0), self.divider);
+                }
             }
             if let Some((Some((pane, zone)), color)) = self.drop
                 && let Some((_, l)) = self
@@ -501,6 +631,12 @@ impl Widget<Message, iced::Theme, iced::Renderer> for SplitContainer<'_> {
                     zone.highlight(l.bounds()),
                     Color { a: 0.25, ..color },
                 );
+            }
+            if let Some((ground, ring, _)) = self.tiles {
+                let tiles: Vec<(PaneId, Rectangle)> =
+                    panes().map(|(id, l)| (*id, l.bounds())).collect();
+                draw_tiles(renderer, ground, ring, self.border, &tiles);
+                return;
             }
             let Some((pane, color)) = self.border else {
                 return;

@@ -113,7 +113,7 @@ fn next_prev_and_go_to_tab() {
     assert_eq!(app.active, tabs[1]);
     act(&mut app, Action::GoToTab(9));
     assert_eq!(app.active, tabs[1], "out of range is ignored");
-    send(&mut app, Message::ActivateTab(tabs[0]));
+    act(&mut app, Action::GoToTab(1));
     assert_eq!(app.active, tabs[0]);
 }
 

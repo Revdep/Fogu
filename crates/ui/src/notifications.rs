@@ -225,7 +225,7 @@ fn toast_view(note: &Notification, look: Look) -> Element<'_, Message> {
     }
     let close = button(crate::icons::icon(
         crate::icons::Icon::Close,
-        10.0,
+        13.0,
         look.dim,
     ))
     .width(20)

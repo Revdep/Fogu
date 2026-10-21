@@ -3,7 +3,7 @@
 //! profile picker, later by the command palette, so nothing here knows about profiles.
 
 use iced::widget::{column, container, mouse_area, row, space, text};
-use iced::{Alignment, Color, Element, Length};
+use iced::{Alignment, Border, Color, Element, Length};
 
 use crate::message::Message;
 
@@ -27,10 +27,45 @@ pub struct FuzzyRow {
     pub detail: String,
     /// Searched too, not drawn (group name, tags…).
     pub keywords: Vec<String>,
-    /// Colour bar on the left.
-    pub chip: Option<Color>,
+    /// The status mark on the left.
+    pub mark: Mark,
     /// A glyph before the title.
     pub icon: Option<String>,
+}
+
+/// A row's status mark: a 7 px dot in a 16 px slot.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Mark {
+    #[default]
+    None,
+    /// Not live: a hollow 1.5 px ring.
+    Ring(Color),
+    /// Live: a filled dot with a soft glow.
+    Dot(Color),
+}
+
+/// The 16 px slot with `mark` centred in it.
+pub fn mark_view<'a>(mark: Mark) -> Element<'a, Message> {
+    let dot = container(space())
+        .width(7)
+        .height(7)
+        .style(move |_theme: &iced::Theme| {
+            let round = Border::default().rounded(3.5);
+            match mark {
+                Mark::None => container::Style::default(),
+                Mark::Ring(color) => container::Style {
+                    border: round.width(1.5).color(color),
+                    ..container::Style::default()
+                },
+                Mark::Dot(color) => container::Style {
+                    background: Some(color.into()),
+                    border: round,
+                    shadow: crate::style::glow(color, 0.8, 8.0),
+                    ..container::Style::default()
+                },
+            }
+        });
+    container(dot).center_x(16).into()
 }
 
 /// How well `query` (a subsequence, case-insensitive) matches `text`: `None` = no match.
@@ -117,6 +152,33 @@ pub fn step(selected: usize, delta: i8, len: usize) -> usize {
         .min(len.saturating_sub(1))
 }
 
+/// The characters of `text` a (greedy, case-insensitive) subsequence match of `query` lands on,
+/// for highlighting; empty when `query` does not match.
+/// shortcut: greedy, so it may mark other letters than the best-scoring alignment would.
+pub fn matched(query: &str, text: &str) -> Vec<bool> {
+    let mut want = query
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .flat_map(char::to_lowercase)
+        .peekable();
+    let marks: Vec<bool> = text
+        .chars()
+        .map(|c| {
+            let hit = want
+                .peek()
+                .is_some_and(|&w| c.to_lowercase().next() == Some(w));
+            if hit {
+                want.next();
+            }
+            hit
+        })
+        .collect();
+    if want.peek().is_some() {
+        return vec![false; marks.len()];
+    }
+    marks
+}
+
 /// What a row publishes on each mouse gesture (`None` = nothing).
 #[derive(Clone, Debug, Default)]
 pub struct RowEvents {
@@ -124,6 +186,8 @@ pub struct RowEvents {
     pub double: Option<Message>,
     pub middle: Option<Message>,
     pub right: Option<Message>,
+    pub enter: Option<Message>,
+    pub exit: Option<Message>,
 }
 
 /// Colours a row is drawn with.
@@ -133,20 +197,20 @@ pub struct RowLook {
     pub dim: Color,
     /// Background of the selected row.
     pub selected: Color,
+    /// Background of the hovered row.
+    pub hover: Color,
 }
 
-/// One row: chip, icon, title over subtitle, detail on the right.
+/// One row: status mark, icon, title over subtitle, then `trailing` (hover actions) or the
+/// detail on the right.
 pub fn row_view<'a>(
     item: &FuzzyRow,
     selected: bool,
+    hovered: bool,
     look: RowLook,
     events: RowEvents,
+    trailing: Option<Element<'a, Message>>,
 ) -> Element<'a, Message> {
-    let chip = item.chip.unwrap_or(Color::TRANSPARENT);
-    let chip = container(space())
-        .width(4)
-        .height(30)
-        .style(move |_theme: &iced::Theme| container::background(chip));
     let mut title = row![].spacing(6).align_y(Alignment::Center);
     if let Some(icon) = &item.icon {
         title = title.push(text(icon.clone()).size(14).color(look.fg));
@@ -160,22 +224,39 @@ pub fn row_view<'a>(
     let label = column![
         title,
         text(item.subtitle.clone())
-            .size(11)
+            .size(11.5)
             .color(look.dim)
             .wrapping(text::Wrapping::None),
     ]
+    .spacing(1)
     .width(Length::Fill)
     .clip(true);
-    let detail = text(item.detail.clone()).size(11).color(look.dim);
-    let body = row![chip, label, detail]
+    let detail = trailing.unwrap_or_else(|| {
+        text(item.detail.clone())
+            .size(11)
+            .color(look.dim)
+            .wrapping(text::Wrapping::None)
+            .into()
+    });
+    let body = row![mark_view(item.mark), label, detail]
         .spacing(8)
-        .padding([2, 6])
+        .padding(iced::Padding {
+            top: 5.0,
+            right: 6.0,
+            bottom: 5.0,
+            left: 2.0,
+        })
         .align_y(Alignment::Center);
-    let bg = selected.then_some(look.selected);
+    let bg = if selected {
+        Some(look.selected)
+    } else {
+        hovered.then_some(look.hover)
+    };
     let body = container(body)
         .width(Length::Fill)
         .style(move |_theme: &iced::Theme| container::Style {
             background: bg.map(Into::into),
+            border: Border::default().rounded(crate::tokens::R_BTN),
             ..container::Style::default()
         });
     let mut area = mouse_area(body);
@@ -190,6 +271,12 @@ pub fn row_view<'a>(
     }
     if let Some(m) = events.right {
         area = area.on_right_press(m);
+    }
+    if let Some(m) = events.enter {
+        area = area.on_enter(m);
+    }
+    if let Some(m) = events.exit {
+        area = area.on_exit(m);
     }
     area.into()
 }
@@ -260,6 +347,20 @@ mod tests {
             row.keywords = vec!["Work".to_owned()];
         }
         assert_eq!(rank("work", &list), [1]);
+    }
+
+    #[test]
+    fn matched_marks_the_greedy_subsequence() {
+        let marks = |q, t| -> String {
+            matched(q, t)
+                .iter()
+                .map(|&m| if m { '^' } else { '.' })
+                .collect()
+        };
+        assert_eq!(marks("wb", "web-backup"), "^.^.......");
+        assert_eq!(marks("W B", "web"), "^.^");
+        assert_eq!(marks("xz", "web"), "...");
+        assert_eq!(marks("", "ab"), "..");
     }
 
     #[test]

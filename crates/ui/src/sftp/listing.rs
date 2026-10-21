@@ -234,16 +234,6 @@ pub fn is_dir(e: &Entry) -> bool {
         || (e.kind == EntryKind::Symlink && e.link_kind == Some(EntryKind::Dir))
 }
 
-/// The glyph before a name.
-pub fn kind_icon(e: &Entry) -> &'static str {
-    match e.kind {
-        EntryKind::Dir => "▪",
-        EntryKind::Symlink => "↪",
-        EntryKind::File => "·",
-        EntryKind::Other => "◇",
-    }
-}
-
 /// A name as shown in the list: sanitized, `/` after directories.
 pub fn shown_name(e: &Entry) -> String {
     let mut name = display_name(&e.name);

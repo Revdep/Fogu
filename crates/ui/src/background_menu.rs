@@ -246,6 +246,7 @@ impl App {
                 Notification::new(Level::Error, "Background not saved").detail(why.to_string());
             return self.notify(note);
         }
+        self.remember_config_file();
         let config = Arc::make_mut(&mut self.config);
         if let Some(profile) = config.profiles.iter_mut().find(|p| p.id == id) {
             profile.background.clone_from(&value);
@@ -291,19 +292,34 @@ impl App {
         }))
     }
 
+    /// Alpha of the terminal area: `appearance.window_opacity` once the window was created
+    /// transparent, else opaque.
+    pub(crate) fn window_alpha(&self) -> f32 {
+        if !self.window_transparent {
+            return 1.0;
+        }
+        let opacity = self.config.appearance.window_opacity;
+        opacity.clamp(crate::settings::MIN_OPACITY, 1.0)
+    }
+
     /// What `tab` draws under its panes, and the alpha of the terminal's default background.
-    /// An image still loading (or that failed) draws nothing: the terminal stays opaque.
+    /// An image still loading (or that failed) draws nothing: the terminal stays opaque, unless
+    /// the window is see-through (the split's fill then carries the opacity).
     pub(crate) fn backdrop(&self, tab: &Tab) -> (Option<Backdrop>, f32) {
+        let bare = if self.window_alpha() < 1.0 { 0.0 } else { 1.0 };
         let Some(effective) =
             effective_background(&tab.background, &tab.profile, &self.config.appearance)
         else {
-            return (None, 1.0);
+            return (None, bare);
         };
         let backdrop = match effective.background {
-            Background::Color(color) => Backdrop::Color(to_iced(*color)),
+            Background::Color(color) => Backdrop::Color(iced::Color {
+                a: self.window_alpha(),
+                ..to_iced(*color)
+            }),
             Background::Image { path, fit, .. } => {
                 let Some(image) = self.backgrounds.get(&Key::new(path, *fit)) else {
-                    return (None, 1.0);
+                    return (None, bare);
                 };
                 Backdrop::Image {
                     handle: image.handle.clone(),

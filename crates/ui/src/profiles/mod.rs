@@ -18,13 +18,12 @@ use std::path::PathBuf;
 use fogu_core::recent::Recent;
 use fogu_core::{
     Config, EffectiveProfile, GroupId, Profile, ProfileId, ProfileKind, QuickConnect,
-    QuickConnectError, RgbColor, SshOpts, resolve,
+    QuickConnectError, SshOpts, resolve,
 };
 use fogu_term::sanitize_title;
-use iced::{Color, Point};
+use iced::Point;
 
-use crate::context_menu::to_iced;
-use crate::fuzzy_list::{self, FuzzyRow};
+use crate::fuzzy_list::{self, FuzzyRow, Mark};
 
 pub use handlers::{Launch, ProfilesMsg};
 pub use ssh_config::SshHosts;
@@ -37,9 +36,6 @@ pub const QUICK_INPUT: &str = "fogu-profiles-quick";
 pub const QUICK_PREFIX: &str = "quick:";
 /// Narrowest sidebar, logical px.
 pub const MIN_WIDTH: f32 = 180.0;
-/// Chip colour of SSH / local profiles without their own colour.
-const SSH_CHIP: u32 = 0x00_90FF;
-const LOCAL_CHIP: u32 = 0x30_A46C;
 
 /// Where a profile comes from; only stored ones can be edited, moved or deleted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -97,6 +93,8 @@ pub struct ProfilesView {
     /// The sidebar has the keyboard (last click was inside it, or it was just opened).
     pub focused: bool,
     pub hovered: bool,
+    /// The row under the pointer (its detail turns into Split / Edit buttons).
+    pub hovered_row: Option<usize>,
     pub query: String,
     pub quick: String,
     /// Why the last quick connect was refused.
@@ -131,6 +129,7 @@ impl ProfilesView {
             open: false,
             focused: false,
             hovered: false,
+            hovered_row: None,
             query: String::new(),
             quick: String::new(),
             quick_error: None,
@@ -293,11 +292,10 @@ pub fn rows(entries: &[Entry], config: &Config, recent: &Recent, now: u64) -> Ve
         .iter()
         .map(|e| {
             let p = &e.profile;
-            let default_chip = match p.kind {
-                ProfileKind::Ssh(_) => SSH_CHIP,
-                ProfileKind::Local(_) => LOCAL_CHIP,
+            let mark = match p.kind {
+                ProfileKind::Ssh(_) => Mark::Ring(crate::tokens::A700),
+                ProfileKind::Local(_) => Mark::Ring(crate::tokens::N700),
             };
-            let chip: Color = to_iced(p.color.unwrap_or(RgbColor::from_hex(default_chip)));
             let group = p
                 .group
                 .as_ref()
@@ -314,7 +312,7 @@ pub fn rows(entries: &[Entry], config: &Config, recent: &Recent, now: u64) -> Ve
                     .into_iter()
                     .chain((e.origin == Origin::SshConfig).then(|| "ssh config".to_owned()))
                     .collect(),
-                chip: Some(chip),
+                mark,
                 icon: glyph(p.icon.as_deref()),
             }
         })

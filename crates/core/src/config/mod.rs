@@ -10,7 +10,8 @@ pub mod ssh_opts;
 mod validate;
 
 pub use edit::{
-    ProfileEdit, edit_profiles, slug, unique_group_id, unique_profile_id, unique_profile_name,
+    ProfileEdit, SETTINGS_SECTIONS, edit_profiles, edit_settings, slug, unique_group_id,
+    unique_profile_id, unique_profile_name,
 };
 pub use io::{ConfigError, config_dir, load, set_profile_background};
 pub use sftp::SftpCfg;
@@ -94,6 +95,13 @@ pub struct Appearance {
     /// Alpha (0..=1) of the terminal's default background over a tab background; unset = 0.75
     /// over an image, 0 over a solid colour. Explicit SGR backgrounds always stay opaque.
     pub terminal_bg_alpha: Option<f32>,
+    /// Opacity (0.2..=1) of the terminal area over the desktop; the tab bar and the sidebars stay
+    /// opaque. Below 1 the window is created transparent, so going from 1 to less (or back)
+    /// needs a restart.
+    pub window_opacity: f32,
+    /// Blurs the desktop behind a transparent window (KDE and macOS; ignored elsewhere). Read
+    /// when the window is created.
+    pub window_blur: bool,
     /// Show the generated "Default shell" + `/etc/shells` profiles (profile sidebar and picker).
     pub show_builtin_profiles: bool,
     /// How many recently opened profiles the sidebar's "Recent" section shows (0 hides it).
@@ -116,6 +124,8 @@ impl Default for Appearance {
             color_scheme: "Fogu Dark".to_owned(),
             tabs_location: TabsLocation::default(),
             terminal_bg_alpha: None,
+            window_opacity: 1.0,
+            window_blur: false,
             show_builtin_profiles: true,
             recent_profiles: 3,
             profiles_sidebar_width: 280.0,

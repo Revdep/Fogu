@@ -69,6 +69,8 @@ pub enum ProfilesMsg {
     AskDelete(ProfileId),
     ConfirmDelete(bool),
     Hover(bool),
+    /// The pointer entered (`true`) or left the row at this position.
+    HoverRow(usize, bool),
     Cursor(Point),
     ResizeStart,
     /// Pointer x while dragging the edge (window coordinates = the new width).
@@ -174,6 +176,12 @@ impl App {
                 }
             }
             ProfilesMsg::Hover(over) => view.hovered = over,
+            ProfilesMsg::HoverRow(pos, true) => view.hovered_row = Some(pos),
+            ProfilesMsg::HoverRow(pos, false) => {
+                if view.hovered_row == Some(pos) {
+                    view.hovered_row = None;
+                }
+            }
             // Sidebar-local → window: it sits at the right edge, under the tab bar.
             ProfilesMsg::Cursor(at) => {
                 let left = self.window_size.width - view.width;
@@ -257,17 +265,22 @@ impl App {
         match quick_profile(&self.profiles.quick) {
             Ok(profile) => {
                 self.profiles.quick.clear();
-                let launched = self.launch(&profile, Launch::Tab);
-                let note = Notification::new(Level::Info, "Quick connect")
-                    .detail("Keep this connection as a profile?")
-                    .action(ToastAction::SaveAsProfile(profile.id));
-                Task::batch([launched, self.notify(note)])
+                self.quick_launch(profile, Launch::Tab)
             }
             Err(err) => {
                 self.profiles.quick_error = Some(err.to_string());
                 operation::focus(QUICK_INPUT)
             }
         }
+    }
+
+    /// Launches a quick-connect profile and offers to keep it as a profile.
+    pub(crate) fn quick_launch(&mut self, profile: Profile, how: Launch) -> Task<Message> {
+        let launched = self.launch(&profile, how);
+        let note = Notification::new(Level::Info, "Quick connect")
+            .detail("Keep this connection as a profile?")
+            .action(ToastAction::SaveAsProfile(profile.id));
+        Task::batch([launched, self.notify(note)])
     }
 
     /// Writes `edits` to config.toml in place, then applies them to the running config; an
@@ -285,6 +298,7 @@ impl App {
                 Notification::new(Level::Error, "Profiles not saved").detail(why.to_string());
             return Err(self.notify(note));
         }
+        self.remember_config_file();
         let config = Arc::make_mut(&mut self.config);
         for edit in edits {
             edit.apply(config);

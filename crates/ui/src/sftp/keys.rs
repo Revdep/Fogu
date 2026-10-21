@@ -50,13 +50,8 @@ impl App {
             // That press opened a profile: the keyboard stays with the new terminal.
         } else if sidebar.open && sidebar.hovered {
             sidebar.focused = true;
-        } else if in_panel
-            || self
-                .tabs
-                .iter()
-                .any(|t| t.id == active && t.editor.is_some())
-        {
-            // A click into the SFTP panel or a profile editor page takes the keyboard.
+        } else if in_panel || self.tabs.iter().any(|t| t.id == active && t.is_page()) {
+            // A click into the SFTP panel or a page (editor, settings) takes the keyboard.
             sidebar.focused = false;
         }
     }

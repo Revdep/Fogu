@@ -355,3 +355,89 @@ fn unique_profile_name_skips_taken_names_ignoring_case() {
         "prod-2"
     );
 }
+
+#[test]
+fn settings_write_only_the_changed_keys_in_place() {
+    let text = "# top\n[appearance]\nfont_size = 12 # mine\ncolor_scheme = \"Dracula\"\n\n[[profiles]]\nid = \"a\"\nname = \"A\"\ntype = \"local\"\n";
+    let t = tmp(Some(text));
+    let (old, err) = load(&t.0);
+    assert!(err.is_none());
+    let mut new = old.clone();
+    new.appearance.font_size = 14.0;
+    new.terminal.wheel_lines = 5;
+    new.appearance.terminal_bg_alpha = Some(0.5);
+    edit_settings(&t.0, &old, &new).unwrap();
+    let written = read(&t);
+    assert!(written.contains("font_size = 14.0 # mine"), "{written}");
+    assert!(written.contains("color_scheme = \"Dracula\""), "{written}");
+    assert!(written.contains("# top"), "{written}");
+    assert!(written.contains("[terminal]\nwheel_lines = 5"), "{written}");
+    // Keys that did not change are not spelled out.
+    assert!(!written.contains("scrollback_lines"), "{written}");
+    let (back, _) = load(&t.0);
+    assert_eq!(back.appearance, new.appearance);
+    assert_eq!(back.terminal, new.terminal);
+    assert_eq!(back.profiles, old.profiles);
+
+    // An option set back to "unset" removes its key.
+    edit_settings(&t.0, &new, &old).unwrap();
+    assert!(!read(&t).contains("terminal_bg_alpha"));
+}
+
+#[test]
+fn settings_create_a_missing_file() {
+    let t = tmp(None);
+    let old = Config::default();
+    let mut new = old.clone();
+    new.recovery.enabled = false;
+    edit_settings(&t.0, &old, &new).unwrap();
+    assert_eq!(read(&t).trim(), "[recovery]\nenabled = false");
+}
+
+#[test]
+fn fractional_settings_are_written_at_f32_precision() {
+    let t = tmp(None);
+    let old = Config::default();
+    let mut new = old.clone();
+    new.terminal.pane_resize_step = 0.11;
+    new.appearance.window_opacity = 0.37;
+    edit_settings(&t.0, &old, &new).unwrap();
+    let written = read(&t);
+    assert!(written.contains("pane_resize_step = 0.11\n"), "{written}");
+    assert!(written.contains("window_opacity = 0.37\n"), "{written}");
+}
+
+#[test]
+fn a_nan_float_in_the_file_does_not_block_settings_writes() {
+    let t = tmp(Some("[appearance]\nwindow_opacity = nan\n"));
+    let (old, _) = load(&t.0);
+    let mut new = old.clone();
+    new.terminal.wheel_lines = 4;
+    edit_settings(&t.0, &old, &new).unwrap();
+    assert!(read(&t).contains("wheel_lines = 4"));
+}
+
+#[test]
+fn floats_inside_a_profile_table_are_written_at_f32_precision() {
+    let text = "[[profiles]]\nid = \"a\"\nname = \"A\"\ntype = \"local\"\n";
+    let t = tmp(Some(text));
+    let (config, _) = load(&t.0);
+    let old = config.profiles.first().unwrap().clone();
+    let mut new = old.clone();
+    new.background = Some(crate::Background::Image {
+        path: PathBuf::from("/tmp/bg.png"),
+        opacity: 0.85,
+        fit: crate::Fit::Cover,
+        blur: false,
+    });
+    edit_profiles(
+        &t.0,
+        &[ProfileEdit::Update {
+            old: Box::new(old),
+            new: Box::new(new),
+        }],
+    )
+    .unwrap();
+    let written = read(&t);
+    assert!(written.contains("opacity = 0.85"), "{written}");
+}

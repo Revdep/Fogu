@@ -14,10 +14,13 @@ use iced::{Alignment, Element, Length, Task};
 
 use crate::app::App;
 use crate::forms::{self, ERROR, Field, FieldValue, WARN};
+use crate::icons::{Icon, icon};
 use crate::message::Message;
 use crate::notifications::{Level, Notification};
 use crate::sftp::panel::Look;
+use crate::style::{self, Btn};
 use crate::tab::{Pane, PaneId};
+use crate::tokens::{self as t, alpha};
 
 const KINDS: [(&str, ForwardKind); 3] = [
     ("Local (-L)", ForwardKind::Local),
@@ -250,79 +253,176 @@ pub fn view<'a>(
     stored: bool,
     look: Look,
 ) -> Element<'a, Message> {
-    let mut list = Column::new().spacing(6);
+    let host = match &pane.profile.kind {
+        ProfileKind::Ssh(ssh) => ssh
+            .host
+            .clone()
+            .unwrap_or_else(|| pane.profile.name.clone()),
+        ProfileKind::Local(_) => pane.profile.name.clone(),
+    };
+    let mut list = Column::new().spacing(8);
     if pane.forwards.is_empty() {
-        list = list.push(text("No forwards.").size(13).color(look.dim));
+        list = list.push(text("No forwards yet.").size(13).color(look.dim));
     }
     for status in &pane.forwards {
-        list = list.push(forward_row(status, look));
+        list = list.push(forward_row(status, &host, look));
     }
+    let listening = pane
+        .forwards
+        .iter()
+        .filter(|f| f.state == ForwardState::Listening)
+        .count();
+    let close = button(icon(Icon::Close, 14.0, look.dim))
+        .width(28)
+        .height(28)
+        .padding(0)
+        .style(style::icon_btn(look, false))
+        .on_press(Message::Forwards(ForwardsMsg::Close));
+    let title = row![
+        column![
+            text("Port forwarding")
+                .size(19)
+                .font(crate::UI_MEDIUM)
+                .color(look.fg),
+            text(format!(
+                "{host} · {listening} listening · live, no reconnect"
+            ))
+            .size(12)
+            .color(look.dim),
+        ]
+        .spacing(3)
+        .width(Length::Fill),
+        close,
+    ]
+    .align_y(Alignment::Start);
     let content = column![
-        text("Port forwarding").size(18).color(look.fg),
-        scrollable(list).height(Length::Shrink),
-        text("Add a forward").size(15).color(look.fg),
+        title,
+        scrollable(list)
+            .height(Length::Shrink)
+            .style(crate::style::scrollbar),
+        text("ADD A FORWARD").size(10.5).color(look.dim),
         form(d, stored, look),
         row![
-            button(text("Add")).on_press(Message::Forwards(ForwardsMsg::Add)),
-            button(text("Close"))
-                .style(button::secondary)
+            iced::widget::space().width(Length::Fill),
+            button(text("Close").size(13))
+                .padding([6, 14])
+                .style(style::btn(look, Btn::Secondary))
                 .on_press(Message::Forwards(ForwardsMsg::Close)),
+            button(text("Add").size(13))
+                .padding([6, 14])
+                .style(style::btn(look, Btn::Primary))
+                .on_press(Message::Forwards(ForwardsMsg::Add)),
         ]
         .spacing(8),
     ]
-    .spacing(12);
+    .spacing(16);
     container(content)
-        .padding(16)
-        .max_width(640)
-        .style(move |_theme: &iced::Theme| {
-            container::background(look.bg).border(iced::Border {
-                color: look.dim,
-                width: 1.0,
-                radius: 6.0.into(),
-            })
-        })
+        .padding([20, 22])
+        .max_width(720)
+        .style(move |_theme: &iced::Theme| style::floating(look, t::R_DIALOG))
         .into()
 }
 
-fn forward_row(status: &ForwardStatus, look: Look) -> Element<'_, Message> {
-    let mut label = sanitize_remote(&status.forward.label(), SHOWN_MAX_CHARS, false);
-    if !status.forward.description.is_empty() {
-        label.push_str(" — ");
-        label.push_str(&sanitize_remote(
-            &status.forward.description,
-            SHOWN_MAX_CHARS,
-            false,
-        ));
-    }
-    let (state, color) = match &status.state {
-        ForwardState::Listening => {
-            let n = status.active_connections;
-            let s = if n == 1 { "" } else { "s" };
-            (format!("Listening · {n} connection{s}"), look.accent)
-        }
-        ForwardState::Error(why) => (sanitize_remote(why, SHOWN_MAX_CHARS, false), ERROR),
-        ForwardState::Stopped => ("Stopped".to_owned(), look.dim),
+/// A small chip: mono text on `bg`, radius 6.
+fn chip<'a>(label: String, fg: iced::Color, bg: iced::Color) -> Element<'a, Message> {
+    container(text(label).size(11.5).font(iced::Font::MONOSPACE).color(fg))
+        .padding([3, 8])
+        .style(move |_theme: &iced::Theme| style::tag(bg))
+        .into()
+}
+
+/// The route's flow line: accent while listening, faint otherwise.
+fn flow<'a>(on: bool) -> Element<'a, Message> {
+    let color = if on { t::A500 } else { alpha(t::A500, 0.3) };
+    container(iced::widget::space())
+        .width(Length::Fill)
+        .height(2)
+        .style(move |_theme: &iced::Theme| container::background(color))
+        .into()
+}
+
+/// One route: type tag · listen · flow · host · flow · destination · connections · remove.
+fn forward_row<'a>(status: &'a ForwardStatus, host: &str, look: Look) -> Element<'a, Message> {
+    let f = &status.forward;
+    let on = status.state == ForwardState::Listening;
+    let (kind, tag_text, tag_fill) = match f.kind {
+        ForwardKind::Local => ("Local", t::A100, t::A800),
+        ForwardKind::Remote => ("Remote", t::N100, t::N800),
+        ForwardKind::Dynamic => ("Dynamic", look.accent_hi, iced::Color::TRANSPARENT),
     };
-    let mut details = column![
-        text(label).size(13).color(look.fg),
-        text(state).size(12).color(color)
-    ];
-    if status.forward.is_exposed() {
-        details = details.push(
+    let tag = container(text(kind).size(11).color(tag_text))
+        .padding([2, 7])
+        .style(move |_theme: &iced::Theme| {
+            let mut s = style::tag(tag_fill);
+            if tag_fill == iced::Color::TRANSPARENT {
+                s.border = s.border.width(1).color(t::A600);
+            }
+            s
+        });
+    let clip = |s: String| sanitize_remote(&s, SHOWN_MAX_CHARS, false);
+    let listen = chip(
+        clip(format!("{}:{}", f.host, f.port)),
+        look.fg,
+        look.surface,
+    );
+    let host_pill = container(text(host.to_owned()).size(11.5).color(t::A200))
+        .padding([3, 9])
+        .style(move |_theme: &iced::Theme| container::Style {
+            background: Some(t::A900.into()),
+            border: iced::Border::default().rounded(999),
+            shadow: if on {
+                style::glow(t::ACCENT, 0.45, 12.0)
+            } else {
+                iced::Shadow::default()
+            },
+            ..container::Style::default()
+        });
+    let mut route = row![tag, listen, flow(on), host_pill]
+        .spacing(8)
+        .align_y(Alignment::Center);
+    if f.kind != ForwardKind::Dynamic {
+        let target = chip(
+            clip(format!("{}:{}", f.target_address, f.target_port)),
+            look.fg,
+            look.surface,
+        );
+        route = route.push(flow(on)).push(target);
+    }
+    let n = status.active_connections;
+    let count = match &status.state {
+        ForwardState::Listening => format!("{n} conn{}", if n == 1 { "" } else { "s" }),
+        ForwardState::Error(_) => "error".to_owned(),
+        ForwardState::Stopped => "stopped".to_owned(),
+    };
+    let remove = button(icon(Icon::Close, 13.0, look.dim))
+        .width(24)
+        .height(24)
+        .padding(0)
+        .style(style::icon_btn(look, false))
+        .on_press(Message::Forwards(ForwardsMsg::Remove(status.id)));
+    let route = route
+        .push(text(count).size(11.5).color(look.dim))
+        .push(remove);
+    let mut body = column![route].spacing(6);
+    if !f.description.is_empty() {
+        body = body.push(text(clip(f.description.clone())).size(12).color(look.dim));
+    }
+    if let ForwardState::Error(why) = &status.state {
+        body = body.push(text(clip(why.clone())).size(12).color(ERROR));
+    }
+    if f.is_exposed() {
+        body = body.push(
             text("Reachable from other machines (not a loopback address)")
                 .size(12)
                 .color(WARN),
         );
     }
-    row![
-        details.width(Length::Fill),
-        button(text("Remove").size(13))
-            .style(button::secondary)
-            .on_press(Message::Forwards(ForwardsMsg::Remove(status.id))),
-    ]
-    .spacing(8)
-    .align_y(Alignment::Center)
-    .into()
+    // Stopped routes leave the list (`apply_status`), so there is none to dim.
+    container(body)
+        .padding([12, 14])
+        .width(Length::Fill)
+        .style(move |_theme: &iced::Theme| style::card(look, t::R_PANE))
+        .into()
 }
 
 fn form<'a>(d: &'a ForwardsDialog, stored: bool, look: Look) -> Element<'a, Message> {

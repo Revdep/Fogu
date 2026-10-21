@@ -1,23 +1,26 @@
-//! Drawing of the SFTP panel (stock iced widgets, scheme colours): header, toolbar, breadcrumb,
-//! column headers, a virtualized entry list, and the transfers strip; plus the conflict dialog.
+//! Drawing of the SFTP panel (stock iced widgets, Nocturne): header (host tag, Follow shell),
+//! navigation and breadcrumb, actions and filter, column headers, a virtualized entry list, and
+//! the transfers strip; plus the conflict dialog.
 //! Every remote string shown here went through `display_name`.
 
 use std::fmt::Write as _;
 
 use iced::widget::{
-    Id, Space, button, checkbox, column, container, mouse_area, row, scrollable, text, text_input,
-    tooltip,
+    Id, Space, button, column, container, mouse_area, row, scrollable, text, text_input, tooltip,
 };
-use iced::{Alignment, Background, Border, Color, Element, Font, Length, Theme};
+use iced::{Alignment, Background, Border, Color, Element, Length, Theme};
 
 use super::breadcrumb::segments;
 use super::{PanelMsg, SftpMsg, SftpPanelState};
+use crate::icons::{Icon, PHOSPHOR, glyph, icon};
 use crate::message::Message;
 use crate::palette::Colors;
+use crate::style::{self, Btn};
 use crate::tab::TabId;
+use crate::tokens as t;
 
 /// Height of one list row (keyboard scrolling uses it too).
-pub const ROW_H: f32 = 22.0;
+pub const ROW_H: f32 = 26.0;
 /// The entry list's scrollable.
 pub const LIST_ID: &str = "fogu-sftp-list";
 /// The filter field.
@@ -88,118 +91,219 @@ pub(super) fn label<'a>(value: impl text::IntoFragment<'a>, color: Color) -> tex
         .wrapping(text::Wrapping::None)
 }
 
-/// The whole panel of tab `tab`.
-pub fn view<'a>(tab: TabId, panel: &'a SftpPanelState, colors: &Colors) -> Element<'a, Message> {
+/// A 28 px icon button with a tooltip; disabled when `on_press` is `None`.
+fn icon_button(
+    glyph: Icon,
+    tip: &str,
+    look: Look,
+    on_press: Option<Message>,
+) -> Element<'_, Message> {
+    let color = if on_press.is_some() {
+        look.fg
+    } else {
+        Color {
+            a: 0.35,
+            ..look.dim
+        }
+    };
+    tooltip(
+        button(icon(glyph, 15.0, color))
+            .width(28)
+            .height(28)
+            .padding(0)
+            .style(style::icon_btn(look, false))
+            .on_press_maybe(on_press),
+        container(text(tip).size(12))
+            .padding(4)
+            .style(container::rounded_box),
+        tooltip::Position::Bottom,
+    )
+    .into()
+}
+
+/// A button with an icon and a label in the `kind` style.
+fn labeled_button<'a>(
+    glyph: Icon,
+    label: &str,
+    kind: Btn,
+    look: Look,
+    on_press: Option<Message>,
+) -> Element<'a, Message> {
+    let tint = match kind {
+        Btn::Ghost | Btn::Primary => look.accent_hi,
+        _ => look.dim,
+    };
+    button(
+        row![
+            glyph_of(glyph, 13.0, tint),
+            text(label.to_owned()).size(12.5)
+        ]
+        .spacing(6)
+        .align_y(Alignment::Center),
+    )
+    .padding([4, 10])
+    .style(style::btn(look, kind))
+    .on_press_maybe(on_press)
+    .into()
+}
+
+fn glyph_of<'a>(icon: Icon, size: f32, color: Color) -> Element<'a, Message> {
+    glyph(icon, size, color).into()
+}
+
+/// The whole panel of tab `tab`; `host` is shown as a tag in the header.
+#[expect(clippy::too_many_lines, reason = "one widget tree, top to bottom")]
+pub fn view<'a>(
+    tab: TabId,
+    panel: &'a SftpPanelState,
+    colors: &Colors,
+    host: String,
+) -> Element<'a, Message> {
     let look = Look::new(colors);
     let has_path = panel.path.is_some();
-    let nav = |label: &str, tip: &'a str, m: PanelMsg, enabled: bool| {
-        tooltip(
-            flat(label.to_owned(), look, enabled.then(|| msg(tab, m))),
-            container(text(tip).size(12))
-                .padding(4)
-                .style(container::rounded_box),
-            tooltip::Position::Bottom,
-        )
-    };
-    let header = row![
-        label("SFTP", look.fg).font(Font {
-            weight: iced::font::Weight::Bold,
-            ..Font::DEFAULT
-        }),
-        Space::new().width(Length::Fill),
-        follow_controls(tab, panel, look),
-        nav(
-            "cd here",
-            "Type cd to this folder into the terminal",
-            PanelMsg::CdHere,
-            has_path
-        ),
-        flat("×", look, Some(msg(tab, PanelMsg::Close))),
+    let mut header = row![
+        glyph(Icon::Folder, 16.0, look.accent_hi),
+        text("SFTP")
+            .size(13.5)
+            .font(crate::UI_MEDIUM)
+            .color(look.fg),
     ]
-    .spacing(4)
+    .spacing(8)
     .align_y(Alignment::Center);
-    let toolbar = row![
-        nav("←", "Back", PanelMsg::Back, !panel.back.is_empty()),
-        nav("↑", "Up", PanelMsg::Up, has_path),
-        nav("⌂", "Home", PanelMsg::Home, true),
-        nav("⟳", "Refresh", PanelMsg::Refresh, true),
-        text_input("Filter", &panel.listing.filter)
-            .id(Id::new(FILTER_INPUT))
-            .on_input(move |f| msg(tab, PanelMsg::Filter(f)))
-            .size(SIZE)
-            .padding(3)
-            .width(Length::Fill),
-        checkbox(panel.listing.show_hidden)
-            .label("hidden")
-            .text_size(SIZE)
-            .size(14)
-            .style(move |theme: &Theme, status| {
-                let mut style = checkbox::primary(theme, status);
-                style.text_color = Some(look.fg);
-                style
-            })
-            .on_toggle(move |on| msg(tab, PanelMsg::ShowHidden(on))),
+    if !host.is_empty() {
+        header = header.push(
+            container(text(host).size(11).color(t::A100))
+                .padding([2, 7])
+                .style(|_theme: &Theme| style::tag(t::A800)),
+        );
+    }
+    let header = header
+        .push(Space::new().width(Length::Fill))
+        .push(follow_controls(tab, panel, look))
+        .push(
+            button(icon(Icon::Close, 14.0, look.dim))
+                .width(26)
+                .height(26)
+                .padding(0)
+                .style(style::icon_btn(look, false))
+                .on_press(msg(tab, PanelMsg::Close)),
+        );
+    let nav = row![
+        icon_button(
+            Icon::ArrowLeft,
+            "Back",
+            look,
+            (!panel.back.is_empty()).then(|| msg(tab, PanelMsg::Back))
+        ),
+        icon_button(
+            Icon::ArrowUp,
+            "Up",
+            look,
+            has_path.then(|| msg(tab, PanelMsg::Up))
+        ),
+        icon_button(Icon::Home, "Home", look, Some(msg(tab, PanelMsg::Home))),
+        icon_button(
+            Icon::Refresh,
+            "Refresh",
+            look,
+            Some(msg(tab, PanelMsg::Refresh))
+        ),
+        breadcrumb(tab, panel, look),
     ]
-    .spacing(4)
+    .spacing(2)
+    .align_y(Alignment::Center);
+    let filter = text_input("Filter", &panel.listing.filter)
+        .id(Id::new(FILTER_INPUT))
+        .on_input(move |f| msg(tab, PanelMsg::Filter(f)))
+        .icon(text_input::Icon {
+            font: PHOSPHOR,
+            code_point: Icon::Filter.glyph(),
+            size: Some(13.into()),
+            spacing: 6.0,
+            side: text_input::Side::Left,
+        })
+        .size(12.5)
+        .padding([5, 8])
+        .width(Length::Fill)
+        .style(style::input(look));
+    let hidden = row![
+        crate::forms::switch(
+            look,
+            panel.listing.show_hidden,
+            msg(tab, PanelMsg::ShowHidden(!panel.listing.show_hidden))
+        ),
+        label("Hidden", look.dim).size(12),
+    ]
+    .spacing(6)
     .align_y(Alignment::Center);
     let actions = row![
-        flat(
-            "Upload…",
+        labeled_button(
+            Icon::Upload,
+            "Upload",
+            Btn::Secondary,
             look,
             has_path.then(|| msg(tab, PanelMsg::Upload))
         ),
-        flat(
-            "Download…",
+        labeled_button(
+            Icon::Download,
+            "Download",
+            Btn::Secondary,
             look,
             (!panel.listing.selected.is_empty()).then(|| msg(tab, PanelMsg::Download))
         ),
-        flat(
+        labeled_button(
+            Icon::FolderPlus,
             "New folder",
+            Btn::Ghost,
             look,
             has_path.then(|| msg(tab, PanelMsg::NewFolder))
         ),
-        Space::new().width(Length::Fill),
-        label(status_text(panel), look.dim),
     ]
-    .spacing(4)
-    .align_y(Alignment::Center);
+    .spacing(6)
+    .align_y(Alignment::Center)
+    .wrap()
+    .vertical_spacing(6);
+    let filter = row![hidden, filter].spacing(8).align_y(Alignment::Center);
+    let status = label(status_text(panel), look.dim).size(11);
     let mut body = column![
         header,
-        toolbar,
-        breadcrumb(tab, panel, look),
+        nav,
         actions,
+        filter,
         super::list_view::column_headers(tab, panel, look),
         super::list_view::entries(tab, panel, look),
+        status,
     ]
-    .spacing(4);
+    .spacing(8);
     if !panel.transfers.items.is_empty() {
         body = body.push(super::transfer_view::transfers(tab, panel, look));
     }
-    let bg = look.bg;
+    let (bg, edge) = (look.bg, look.border);
     let content = container(body)
-        .padding(6)
+        .padding([12, 14])
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(move |_theme: &Theme| container::background(bg));
+        .style(move |_theme: &Theme| {
+            container::background(bg).border(Border::default().width(1).color(edge))
+        });
     mouse_area(content)
         .on_enter(msg(tab, PanelMsg::Hover(true)))
         .on_exit(msg(tab, PanelMsg::Hover(false)))
         .into()
 }
 
-/// "Follow terminal" checkbox; when off and the terminal is elsewhere, a "resume following"
-/// link.
+/// "Follow shell" switch; when off and the terminal is elsewhere, a "resume" link.
 fn follow_controls(tab: TabId, panel: &SftpPanelState, look: Look) -> Element<'_, Message> {
-    let toggle = checkbox(panel.follow)
-        .label("follow terminal")
-        .text_size(SIZE)
-        .size(14)
-        .style(move |theme: &Theme, status| {
-            let mut style = checkbox::primary(theme, status);
-            style.text_color = Some(look.fg);
-            style
-        })
-        .on_toggle(move |on| msg(tab, PanelMsg::Follow(on)));
+    let toggle = row![
+        label("Follow shell", look.dim).size(12),
+        crate::forms::switch(
+            look,
+            panel.follow,
+            msg(tab, PanelMsg::Follow(!panel.follow))
+        ),
+    ]
+    .spacing(6)
+    .align_y(Alignment::Center);
     let elsewhere = panel
         .shell_cwd
         .as_ref()
@@ -208,14 +312,13 @@ fn follow_controls(tab: TabId, panel: &SftpPanelState, look: Look) -> Element<'_
         return toggle.into();
     }
     row![
+        button(text("resume").size(12))
+            .padding([2, 6])
+            .style(style::btn(look, Btn::Ghost))
+            .on_press(msg(tab, PanelMsg::Follow(true))),
         toggle,
-        flat(
-            "resume following",
-            look,
-            Some(msg(tab, PanelMsg::Follow(true)))
-        )
     ]
-    .spacing(2)
+    .spacing(4)
     .align_y(Alignment::Center)
     .into()
 }
@@ -240,49 +343,63 @@ fn status_text(panel: &SftpPanelState) -> String {
     out
 }
 
-/// Clickable segments; a click on the empty bar switches to a path field.
+/// Clickable segments (hover pills, the current one in the accent) and "cd here"; a click on
+/// the empty bar switches to a path field.
 fn breadcrumb(tab: TabId, panel: &SftpPanelState, look: Look) -> Element<'_, Message> {
     if let Some(value) = &panel.editing {
         return text_input("/path/to/dir", value)
             .id(Id::new(PATH_INPUT))
             .on_input(move |v| msg(tab, PanelMsg::PathInput(v)))
             .on_submit(msg(tab, PanelMsg::PathSubmit))
-            .size(SIZE)
-            .padding(3)
+            .size(12.5)
+            .padding([5, 8])
+            .style(style::input(look))
             .into();
     }
-    let mut parts = row![].align_y(Alignment::Center);
+    let mut parts = row![].spacing(1).align_y(Alignment::Center);
     let segs = panel.path.as_deref().map(segments).unwrap_or_default();
+    let last = segs.len().saturating_sub(1);
     for (i, seg) in segs.into_iter().enumerate() {
         if i > 1 {
-            parts = parts.push(label("/", look.dim));
+            parts = parts.push(glyph(Icon::ChevronRight, 10.0, t::N600));
         }
-        parts = parts.push(flat(
-            seg.label,
-            look,
-            Some(msg(tab, PanelMsg::Go(seg.path))),
-        ));
+        let current = i == last;
+        parts = parts.push(
+            button(text(seg.label).size(12.5))
+                .padding([2, 5])
+                .style(move |theme: &Theme, status| {
+                    let mut s = style::btn(look, Btn::Flat)(theme, status);
+                    s.border.radius = 5.0.into();
+                    if current {
+                        s.text_color = if look.dark { t::A300 } else { look.accent };
+                    }
+                    s
+                })
+                .on_press(msg(tab, PanelMsg::Go(seg.path))),
+        );
     }
-    let dim = look.dim;
-    let bar = container(
-        // Anchored right: a deep path shows its last segments.
-        scrollable(parts)
-            .direction(scrollable::Direction::Horizontal(
-                scrollable::Scrollbar::new().width(2).scroller_width(2),
-            ))
-            .anchor_right(),
+    let crumbs = mouse_area(
+        container(
+            // Anchored right: a deep path shows its last segments.
+            scrollable(parts)
+                .direction(scrollable::Direction::Horizontal(
+                    scrollable::Scrollbar::new().width(0).scroller_width(0),
+                ))
+                .anchor_right(),
+        )
+        .width(Length::Fill),
     )
-    .width(Length::Fill)
-    .padding([1, 2])
-    .style(move |_theme: &Theme| container::Style {
-        border: Border {
-            color: Color { a: 0.4, ..dim },
-            width: 1.0,
-            radius: 3.0.into(),
-        },
-        ..container::Style::default()
-    });
-    mouse_area(bar)
-        .on_press(msg(tab, PanelMsg::EditPath))
+    .on_press(msg(tab, PanelMsg::EditPath));
+    let cd = button(text("cd here").size(12))
+        .padding([2, 6])
+        .style(style::btn(look, Btn::Ghost))
+        .on_press_maybe(panel.path.is_some().then(|| msg(tab, PanelMsg::CdHere)));
+    let (surface, edge) = (look.surface, look.border);
+    container(row![crumbs, cd].spacing(4).align_y(Alignment::Center))
+        .width(Length::Fill)
+        .padding([2, 4])
+        .style(move |_theme: &Theme| {
+            container::background(surface).border(Border::default().rounded(7).width(1).color(edge))
+        })
         .into()
 }

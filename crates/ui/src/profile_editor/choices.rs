@@ -4,12 +4,9 @@ use fogu_core::{Backspace, Fit, ForwardKind, Osc52Policy, SessionEndBehavior, Ss
 
 /// Choice options: label + value (`None` = inherit / unset).
 pub const SESSION_END: [(&str, SessionEndBehavior); 5] = [
-    (
-        "Close if the exit was clean",
-        SessionEndBehavior::CloseIfClean,
-    ),
-    ("Keep the pane open", SessionEndBehavior::Keep),
-    ("Close", SessionEndBehavior::Close),
+    ("Close if clean", SessionEndBehavior::CloseIfClean),
+    ("Keep open", SessionEndBehavior::Keep),
+    ("Always close", SessionEndBehavior::Close),
     ("Auto", SessionEndBehavior::Auto),
     ("Reconnect", SessionEndBehavior::Reconnect),
 ];
@@ -20,13 +17,10 @@ pub const OSC52: [(&str, Option<Osc52Policy>); 4] = [
     ("Deny", Some(Osc52Policy::Deny)),
 ];
 pub const AUTH: [(&str, SshAuth); 5] = [
-    (
-        "Auto (agent, keys, password, keyboard-interactive)",
-        SshAuth::Auto,
-    ),
+    ("Auto (agent, keys, password, keyboard)", SshAuth::Auto),
     ("Password", SshAuth::Password),
-    ("Private keys", SshAuth::PublicKey),
-    ("Agent", SshAuth::Agent),
+    ("Public key", SshAuth::PublicKey),
+    ("ssh-agent", SshAuth::Agent),
     ("Keyboard-interactive", SshAuth::KeyboardInteractive),
 ];
 pub const BACKSPACE: [(&str, Backspace); 4] = [

@@ -83,25 +83,14 @@ impl ProfileEdit {
 /// asked for (`Add`, `AddGroup`), it is created.
 pub fn edit_profiles(dir: &Path, edits: &[ProfileEdit]) -> Result<(), ConfigError> {
     let path = dir.join(FILE_NAME);
-    let text = match std::fs::read_to_string(&path) {
-        Ok(text) => text,
-        Err(err)
-            if err.kind() == std::io::ErrorKind::NotFound
-                && edits
-                    .iter()
-                    .all(|e| matches!(e, ProfileEdit::Add(_) | ProfileEdit::AddGroup(_))) =>
-        {
-            String::new()
-        }
-        Err(err) => return Err(ConfigError::Io { path, source: err }),
-    };
+    let additions = edits
+        .iter()
+        .all(|e| matches!(e, ProfileEdit::Add(_) | ProfileEdit::AddGroup(_)));
+    let mut doc = read_doc(&path, additions)?;
     let parse_error = |message: String| ConfigError::Parse {
         path: path.clone(),
         message,
     };
-    let mut doc: DocumentMut = text
-        .parse()
-        .map_err(|e: toml_edit::TomlError| parse_error(e.to_string()))?;
     for edit in edits {
         apply_to_doc(&mut doc, edit).map_err(|err| match err {
             DocError::NoSuchProfile(id) => ConfigError::NoSuchProfile {
@@ -112,6 +101,62 @@ pub fn edit_profiles(dir: &Path, edits: &[ProfileEdit]) -> Result<(), ConfigErro
         })?;
     }
     write_atomic(dir, doc.to_string().as_bytes())
+}
+
+/// The settings sections [`edit_settings`] writes (profiles, groups and hotkeys have their own
+/// editors).
+pub const SETTINGS_SECTIONS: [&str; 5] = ["appearance", "terminal", "sftp", "ssh", "recovery"];
+
+/// Writes the keys of the [`SETTINGS_SECTIONS`] that differ between `old` and `new` into
+/// `dir/config.toml`, in place (same contract as [`edit_profiles`]); the file is created when
+/// missing. Nothing else in the file is touched.
+pub fn edit_settings(dir: &Path, old: &Config, new: &Config) -> Result<(), ConfigError> {
+    let path = dir.join(FILE_NAME);
+    let mut doc = read_doc(&path, true)?;
+    let bad = |message: String| ConfigError::Parse {
+        path: path.clone(),
+        message,
+    };
+    let unserializable = |_| bad("unserializable settings".to_owned());
+    let before = toml::Table::try_from(old).map_err(unserializable)?;
+    let after = toml::Table::try_from(new).map_err(unserializable)?;
+    for section in SETTINGS_SECTIONS {
+        let table = |t: &toml::Table| t.get(section).and_then(toml::Value::as_table).cloned();
+        let (before, after) = (
+            table(&before).unwrap_or_default(),
+            table(&after).unwrap_or_default(),
+        );
+        if before == after {
+            continue;
+        }
+        let entry = doc
+            .entry(section)
+            .or_insert_with(|| Item::Table(Table::new()))
+            .as_table_like_mut()
+            .ok_or_else(|| bad(format!("[{section}] is not a table")))?;
+        write_diff(entry, &before, &after)
+            .map_err(|_| bad("unserializable settings".to_owned()))?;
+    }
+    write_atomic(dir, doc.to_string().as_bytes())
+}
+
+/// `path` parsed for in-place editing; a missing file reads as empty when `create` is set.
+fn read_doc(path: &Path, create: bool) -> Result<DocumentMut, ConfigError> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(err) if create && err.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(err) => {
+            return Err(ConfigError::Io {
+                path: path.to_path_buf(),
+                source: err,
+            });
+        }
+    };
+    text.parse()
+        .map_err(|e: toml_edit::TomlError| ConfigError::Parse {
+            path: path.to_path_buf(),
+            message: e.to_string(),
+        })
 }
 
 enum DocError {
@@ -171,9 +216,8 @@ fn apply_to_doc(doc: &mut DocumentMut, edit: &ProfileEdit) -> Result<(), DocErro
     Ok(())
 }
 
-/// Writes the keys that differ between `old` and `new` into `old`'s `[[profiles]]` entry: a
-/// changed key gets the new value where it was (keeping its trailing comment), a new key is
-/// appended to the entry, a key `new` no longer has is removed.
+/// Writes the keys that differ between `old` and `new` into `old`'s `[[profiles]]` entry (see
+/// [`write_diff`]).
 fn update(doc: &mut DocumentMut, old: &Profile, new: &Profile) -> Result<(), DocError> {
     let shape = |_| DocError::Shape("unserializable profile");
     let before = toml::Table::try_from(old).map_err(shape)?;
@@ -182,6 +226,17 @@ fn update(doc: &mut DocumentMut, old: &Profile, new: &Profile) -> Result<(), Doc
     let entry = profiles(doc)?
         .get_mut(index)
         .ok_or_else(|| DocError::NoSuchProfile(old.id.0.clone()))?;
+    write_diff(entry, &before, &after)
+}
+
+/// Writes the keys that differ between `before` and `after` into `entry`: a changed key gets
+/// the new value where it was (keeping its trailing comment), a new key is appended, a key
+/// `after` no longer has is removed.
+fn write_diff(
+    entry: &mut dyn toml_edit::TableLike,
+    before: &toml::Table,
+    after: &toml::Table,
+) -> Result<(), DocError> {
     let keys = before
         .keys()
         .chain(after.keys().filter(|k| !before.contains_key(*k)));
@@ -206,7 +261,9 @@ fn update(doc: &mut DocumentMut, old: &Profile, new: &Profile) -> Result<(), Doc
 /// `value` written inline (`{ … }`, `[ … ]`), as one `key = value` line.
 fn inline_value(value: &toml::Value) -> Result<toml_edit::Value, DocError> {
     let shape = DocError::Shape("unserializable profile");
-    let line: DocumentMut = format!("v = {value}").parse().map_err(|_| shape)?;
+    let line: DocumentMut = format!("v = {}", f32_precision(value))
+        .parse()
+        .map_err(|_| shape)?;
     let mut value = line
         .get("v")
         .and_then(Item::as_value)
@@ -214,6 +271,29 @@ fn inline_value(value: &toml::Value) -> Result<toml_edit::Value, DocError> {
         .ok_or(DocError::Shape("unserializable profile"))?;
     value.decor_mut().clear();
     Ok(value)
+}
+
+/// `value` with every float (also inside tables and arrays) cut back to `f32` precision: every
+/// float in the config is an `f32`, which toml widens to `f64` (0.11 → 0.10999999940395355).
+fn f32_precision(value: &toml::Value) -> toml::Value {
+    match value {
+        // The shortest `f32` spelling, read back as the `f64` that prints the same way.
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "the value was an f32 before toml widened it"
+        )]
+        toml::Value::Float(f) => {
+            toml::Value::Float(format!("{:?}", *f as f32).parse().unwrap_or(*f))
+        }
+        toml::Value::Array(items) => toml::Value::Array(items.iter().map(f32_precision).collect()),
+        toml::Value::Table(table) => toml::Value::Table(
+            table
+                .iter()
+                .map(|(k, v)| (k.clone(), f32_precision(v)))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
 }
 
 /// `[[profiles]]`, created when missing.

@@ -286,6 +286,7 @@ impl App {
             Action::OpenProfilePicker => return self.open_picker(),
             Action::ToggleSftp => return self.toggle_sftp(),
             Action::ToggleProfiles => return self.toggle_profiles(),
+            Action::OpenSettings => return self.open_settings(),
             Action::ClearSavedSessions => match &mut self.recovery {
                 Some(recovery) => recovery.pending_clear = true,
                 None => return self.notify(Notification::new(Level::Info, "Tab recovery is off")),
@@ -544,7 +545,6 @@ impl App {
     /// Tab bar, rename and context-menu messages.
     pub(crate) fn on_tab_ui(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::ActivateTab(id) => self.activate(id),
             Message::CloseTab(id) => return self.request_close(CloseTarget::Tab(id)),
             Message::HoverTab(id) => self.hovered_tab = id,
             Message::LeaveTab(id) => {
@@ -612,7 +612,7 @@ impl App {
                 }
             }
             Message::CloseMenu => self.menu = None,
-            Message::Escape => self.on_escape(),
+            Message::Escape => return self.on_escape(),
             _ => {}
         }
         Task::none()

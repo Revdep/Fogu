@@ -29,7 +29,7 @@ fn delete_dialog(tab: TabId, panel: &SftpPanelState) -> Option<Element<'_, Messa
             .style(button::danger)
             .on_press_maybe(ready.then(|| msg(tab, PanelMsg::DeleteConfirm(true)))),
         button(text("Cancel"))
-            .style(button::secondary)
+            .style(crate::style::secondary)
             .on_press(msg(tab, PanelMsg::DeleteConfirm(false))),
     ]
     .spacing(8);
@@ -74,9 +74,11 @@ fn chmod_dialog(tab: TabId, panel: &SftpPanelState) -> Option<Element<'_, Messag
     .spacing(8)
     .align_y(Alignment::Center);
     let buttons = row![
-        button(text("Apply")).on_press_maybe(valid.then(|| msg(tab, PanelMsg::ChmodDone(true)))),
+        button(text("Apply"))
+            .style(crate::style::primary)
+            .on_press_maybe(valid.then(|| msg(tab, PanelMsg::ChmodDone(true)))),
         button(text("Cancel"))
-            .style(button::secondary)
+            .style(crate::style::secondary)
             .on_press(msg(tab, PanelMsg::ChmodDone(false))),
     ]
     .spacing(8);

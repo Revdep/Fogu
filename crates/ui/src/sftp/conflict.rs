@@ -84,7 +84,9 @@ pub fn conflict_dialog(tab: TabId, panel: &SftpPanelState) -> Option<Element<'_,
         .map_or(Direction::Download, |t| t.direction);
     let more = panel.conflicts.queue.len() - 1;
     let choose = |label: &'static str, choice| {
-        button(text(label)).on_press(msg(tab, PanelMsg::Conflict(choice)))
+        button(text(label))
+            .style(crate::style::secondary)
+            .on_press(msg(tab, PanelMsg::Conflict(choice)))
     };
     let mut buttons = row![].spacing(8);
     if conflict.resumable {

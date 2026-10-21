@@ -38,9 +38,15 @@ const MIN_FONT_PT: f32 = 6.0;
 const MAX_FONT_PT: f32 = 40.0;
 /// Initial window size (also the menu-clamping size until the first resize event).
 pub(crate) const WINDOW_SIZE: iced::Size = iced::Size::new(1000.0, 650.0);
+/// How often an external edit of `config.toml` is checked.
+const CONFIG_POLL: Duration = Duration::from_secs(1);
 
 /// The whole application state.
 #[derive(Debug)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent UI flags, not a state machine"
+)]
 pub struct App {
     pub(crate) runtime: Arc<SessionRuntime>,
     pub(crate) config: Arc<Config>,
@@ -66,7 +72,7 @@ pub struct App {
     pub(crate) next_id: u64,
     pub(crate) font: FontSpec,
     /// `config.appearance.font_size` at boot, in points; `ZoomReset`'s target.
-    default_font_size_pt: f32,
+    pub(crate) default_font_size_pt: f32,
     pub(crate) resolved: ResolvedFont,
     pub(crate) metrics: CellMetrics,
     pub(crate) scale: f32,
@@ -91,6 +97,10 @@ pub struct App {
     pub(crate) pending_close: Option<CloseTarget>,
     /// `--config-dir` (SSH `known_hosts` location); `None` = the default.
     pub(crate) config_dir: Option<std::path::PathBuf>,
+    /// Last observed `(modified, length)` of `config.toml`; refreshed after Fogu writes it too.
+    pub(crate) config_file_stamp: Option<(std::time::SystemTime, u64)>,
+    /// `config.toml` is watched for edits (set by [`Self::remember_config_file`] at boot).
+    pub(crate) config_watched: bool,
     /// Modifier keys currently held (from the window's keyboard events).
     pub(crate) modifiers: keyboard::Modifiers,
     /// Dropped files and desktop hints (SFTP panel).
@@ -98,8 +108,14 @@ pub struct App {
     /// Decoded tab background images.
     pub(crate) backgrounds: background::Cache,
     pub(crate) exit_after_first_frame: bool,
-    /// Tab recovery saving state (`None`: off, no state directory, or `--no-recovery`).
+    /// The window was created transparent (`appearance.window_opacity` below 1 at start).
+    pub(crate) window_transparent: bool,
+    /// Tab recovery saving state (`None`: off, no state directory, `--no-recovery`, or another
+    /// Fogu already owns the saved tabs).
     pub(crate) recovery: Option<crate::recovery::Recovery>,
+    /// Held while this is the first Fogu running: it restores and saves the tabs; later ones
+    /// start clean on the start page.
+    pub(crate) instance_lock: Option<std::fs::File>,
     /// The pane whose context menu is open (its "Current process" line updates).
     pub(crate) pane_menu: Option<PaneId>,
     /// A profile editor tab with unsaved changes waits for "Discard changes?".
@@ -188,11 +204,15 @@ impl App {
             secret_dialog: None,
             search: None,
             config_dir: None,
+            config_file_stamp: None,
+            config_watched: false,
             modifiers: keyboard::Modifiers::default(),
             desktop: sftp::Desktop::default(),
             backgrounds: background::Cache::default(),
             exit_after_first_frame: false,
+            window_transparent: config.appearance.window_opacity < 1.0,
             recovery: None,
+            instance_lock: None,
             pane_menu: None,
             pending_discard: None,
             config,
@@ -202,6 +222,18 @@ impl App {
             stub_profiles: Vec::new(),
             #[cfg(test)]
             stub_sftp: Vec::new(),
+        }
+    }
+
+    /// The window's clear colour: transparent when the window was created see-through.
+    pub fn style(&self, theme: &iced::Theme) -> iced::theme::Style {
+        let base = iced::theme::Base::base(theme);
+        if !self.window_transparent {
+            return base;
+        }
+        iced::theme::Style {
+            background_color: iced::Color::TRANSPARENT,
+            ..base
         }
     }
 
@@ -219,16 +251,33 @@ impl App {
         let mut app = Self::new(runtime, config, resolved);
         app.exit_after_first_frame = options.exit_after_first_frame;
         app.config_dir = options.config_dir;
+        app.remember_config_file();
         let mut tasks = vec![app.refresh_ssh_hosts()];
+        tasks.push(app.after(CONFIG_POLL, Message::ConfigTick));
         let mut restored = false;
+        let mut start_welcome = false;
         if let Some(dir) = options.state_dir {
             app.load_recent(dir.join(fogu_core::recent::RECENT_FILE));
             if !options.no_recovery {
-                let enabled = app.config.recovery.enabled;
-                restored = app.restore_session(&dir, enabled);
-                if enabled {
-                    app.recovery = Some(crate::recovery::Recovery::new(dir));
-                    tasks.push(app.after(Duration::from_secs(1), Message::RecoveryTick));
+                match crate::recovery::claim_first(&dir) {
+                    crate::recovery::InstanceClaim::Owner(lock) => {
+                        app.instance_lock = Some(lock);
+                        let enabled = app.config.recovery.enabled;
+                        restored = app.restore_session(&dir, enabled);
+                        if enabled {
+                            app.recovery = Some(crate::recovery::Recovery::new(dir));
+                            tasks.push(app.after(Duration::from_secs(1), Message::RecoveryTick));
+                        }
+                    }
+                    crate::recovery::InstanceClaim::Other => start_welcome = true,
+                    crate::recovery::InstanceClaim::Unconfirmed => {
+                        start_welcome = true;
+                        app.toasts.push(
+                            Notification::new(Level::Warn, "Tab recovery unavailable").detail(
+                                "The instance lock could not be acquired. Tabs will not be restored or saved in this window.",
+                            ),
+                        );
+                    }
                 }
             }
         }
@@ -241,7 +290,9 @@ impl App {
         if !app.toasts.is_empty() {
             tasks.push(app.after(AUTO_DISMISS, Message::ToastExpire));
         }
-        if !restored {
+        if start_welcome {
+            tasks.push(app.open_welcome());
+        } else if !restored {
             let profile = app.default_profile();
             app.open_tab(&profile, None);
         }
@@ -287,8 +338,16 @@ impl App {
         ) {
             self.blink.activity(now);
         }
+        // A message that may write config.toml first takes in an edit of the file not picked up
+        // yet, so what it derives from the running config (new ids and names, the `old` side of
+        // an update) matches the file.
+        let reloaded = if writes_config(&message) {
+            self.reload_config_if_changed()
+        } else {
+            Task::none()
+        };
         let (active, tab_count) = (self.active, self.tabs.len());
-        let mut task = Task::batch([self.dispatch(message), self.sync_backgrounds()]);
+        let mut task = Task::batch([reloaded, self.dispatch(message), self.sync_backgrounds()]);
         if self.active != active || self.tabs.len() != tab_count {
             task = Task::batch([task, self.reveal_active_tab()]);
         }
@@ -299,6 +358,10 @@ impl App {
         task
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one dispatch arm per application message"
+    )]
     fn dispatch(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::DismissToast(id) => {
@@ -312,6 +375,10 @@ impl App {
             }
             Message::ReconnectTick(pane) => self.reconnect_tick(pane),
             Message::RecoveryTick => self.recovery_tick(),
+            Message::ConfigTick => Task::batch([
+                self.reload_config_if_changed(),
+                self.after(CONFIG_POLL, Message::ConfigTick),
+            ]),
             Message::PaneMenu(_)
             | Message::MenuSplit
             | Message::MenuNewWith
@@ -345,6 +412,8 @@ impl App {
             Message::Picker(message) => self.on_picker(message),
             Message::Profiles(message) => self.on_profiles(message),
             Message::Editor(tab, message) => self.on_editor(tab, message),
+            Message::Settings(message) => self.on_settings(message),
+            Message::Welcome(tab, message) => self.on_welcome(tab, message),
             Message::Enter => self.on_enter(),
             Message::ConfirmClose(confirmed) => self.on_confirm_close(confirmed),
             Message::Sftp(message) => self.on_sftp(message),
@@ -513,7 +582,7 @@ impl App {
     }
 
     /// Recomputes cell metrics from font + scale and tells every pane's terminal.
-    fn apply_metrics(&mut self) {
+    pub(crate) fn apply_metrics(&mut self) {
         self.metrics = CellMetrics::new(self.resolved.units, self.font.size_px(), self.scale);
         let m = &self.metrics;
         for pane in self.tabs.iter_mut().flat_map(|t| t.panes.values_mut()) {
@@ -567,4 +636,18 @@ fn query_window_mode() -> Task<Message> {
     window::oldest()
         .and_then(window::mode)
         .map(Message::WindowMode)
+}
+
+/// Messages whose handling may write config.toml (sidebar, editor, forwards, settings, the tab
+/// and background "Save to profile").
+fn writes_config(message: &Message) -> bool {
+    matches!(
+        message,
+        Message::Profiles(_)
+            | Message::Editor(..)
+            | Message::Forwards(_)
+            | Message::Settings(_)
+            | Message::TabSaveToProfile
+            | Message::Background(crate::background_menu::BgMsg::SaveToProfile)
+    )
 }

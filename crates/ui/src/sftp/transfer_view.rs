@@ -1,7 +1,7 @@
 //! The transfers strip of the SFTP panel.
 
 use iced::widget::{Space, column, container, progress_bar, row, scrollable};
-use iced::{Alignment, Background, Border, Color, Element, Length, Theme};
+use iced::{Alignment, Background, Border, Element, Length, Theme};
 
 use super::listing::human_bytes;
 use super::panel::{Look, flat, label, msg};
@@ -32,20 +32,16 @@ pub(super) fn transfers(tab: TabId, panel: &SftpPanelState, look: Look) -> Eleme
     let mut strip = column![header].spacing(4);
     if !list.collapsed {
         let rows = column(list.items.iter().rev().map(|t| transfer_row(tab, t, look))).spacing(6);
-        strip = strip.push(scrollable(rows).height(Length::Shrink));
+        strip = strip.push(
+            scrollable(rows)
+                .height(Length::Shrink)
+                .style(crate::style::scrollbar),
+        );
     }
-    let dim = look.dim;
     container(strip)
         .max_height(220)
-        .padding([4, 6])
-        .style(move |_theme: &Theme| container::Style {
-            border: Border {
-                color: Color { a: 0.3, ..dim },
-                width: 1.0,
-                radius: 0.0.into(),
-            },
-            ..container::Style::default()
-        })
+        .padding([8, 10])
+        .style(move |_theme: &Theme| crate::style::card(look, 8.0))
         .into()
 }
 
@@ -83,9 +79,9 @@ fn transfer_row(tab: TabId, t: &Transfer, look: Look) -> Element<'_, Message> {
     .align_y(Alignment::Center);
     let accent = look.accent;
     let bar = progress_bar(0.0..=1.0, t.fraction())
-        .girth(5)
+        .girth(3)
         .style(move |_theme: &Theme| progress_bar::Style {
-            background: Background::Color(Color { a: 0.15, ..fg }),
+            background: Background::Color(crate::tokens::N900),
             bar: Background::Color(accent),
             border: Border::default().rounded(2),
         });

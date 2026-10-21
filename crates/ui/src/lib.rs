@@ -41,13 +41,17 @@ mod right_click;
 mod runs;
 mod search;
 mod secret_dialog;
+mod settings;
 mod sftp;
 mod split_container;
+mod style;
 mod subscription;
 mod tab;
 mod tab_bar;
 mod terminal_view;
+mod tokens;
 mod view;
+mod welcome;
 
 use std::sync::Arc;
 
@@ -80,6 +84,8 @@ pub struct RunOptions {
 /// same whatever sans-serif the system has; the terminal keeps its own monospace font.
 const INTER_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
 const INTER_MEDIUM: &[u8] = include_bytes!("../../../assets/fonts/Inter-Medium.ttf");
+/// The Phosphor icon font, cut to the glyphs [`icons::Icon`] names.
+const PHOSPHOR: &[u8] = include_bytes!("../../../assets/fonts/Phosphor.ttf");
 pub(crate) const UI_FONT: iced::Font = iced::Font::with_name("Inter");
 /// Titles (toasts, dialogs).
 pub(crate) const UI_MEDIUM: iced::Font = iced::Font {
@@ -92,8 +98,8 @@ pub(crate) const UI_MEDIUM: iced::Font = iced::Font {
 const APP_ID: &str = "fogu";
 /// Window icon: `assets/fogu.png` at 64×64 as raw RGBA (`convert -resize 64x64 -depth 8
 /// rgba:…`), so no image decoder is needed.
-const ICON_RGBA: &[u8] = include_bytes!("../../../assets/icons/fogu-64.rgba");
-const ICON_SIZE: u32 = 64;
+pub(crate) const ICON_RGBA: &[u8] = include_bytes!("../../../assets/icons/fogu-64.rgba");
+pub(crate) const ICON_SIZE: u32 = 64;
 
 /// Runs the Fogu GUI: a window whose first tab runs the default profile, configured by
 /// `config` (loaded by the `fogu` binary via `fogu_core::config::load`).
@@ -125,6 +131,9 @@ pub fn run(config: Arc<Config>, options: RunOptions) -> Result {
         // The tab bar is the title bar (move, maximize and window buttons, resize edges); macOS
         // keeps a native frame, as winit cannot resize an undecorated window there.
         decorations: cfg!(target_os = "macos"),
+        // See-through terminals (`App::style` clears to transparent); read once, at creation.
+        transparent: config.appearance.window_opacity < 1.0,
+        blur: config.appearance.window_opacity < 1.0 && config.appearance.window_blur,
         ..Default::default()
     };
     iced::application(
@@ -134,8 +143,10 @@ pub fn run(config: Arc<Config>, options: RunOptions) -> Result {
     )
     .title(app::App::title)
     .theme(app::App::theme)
+    .style(app::App::style)
     .font(INTER_REGULAR)
     .font(INTER_MEDIUM)
+    .font(PHOSPHOR)
     .default_font(UI_FONT)
     .subscription(app::App::subscription)
     .window(window)

@@ -20,15 +20,17 @@ const ROW_H: f32 = 28.0;
 pub const MENU_INPUT: &str = "fogu-menu-input";
 
 /// Tab colour presets (Radix-like mid tones, readable on dark and light schemes).
-pub const PRESET_COLORS: [(&str, u32); 8] = [
+pub const PRESET_COLORS: [(&str, u32); 10] = [
     ("Red", 0xE5_484D),
-    ("Orange", 0xF7_6B15),
-    ("Yellow", 0xFF_C53D),
-    ("Green", 0x30_A46C),
-    ("Teal", 0x12_A594),
-    ("Blue", 0x00_90FF),
-    ("Purple", 0x8E_4EC6),
-    ("Pink", 0xD6_409F),
+    ("Orange", 0xF0_8C3A),
+    ("Yellow", 0xE6_B84A),
+    ("Green", 0x5F_B87A),
+    ("Teal", 0x3F_B6A8),
+    ("Blue", 0x4C_9EE8),
+    ("Violet", 0x91_84D9),
+    ("Purple", 0xC5_6BD6),
+    ("Pink", 0xE0_6C9F),
+    ("Grey", 0x8A_8F98),
 ];
 
 /// What choosing an item does.
@@ -192,7 +194,8 @@ impl ContextMenu {
             run("Close others", Action::CloseOtherTabs).after_separator(),
             run("Close tabs to the right", Action::CloseTabsRight),
             run("Close", Action::CloseTab),
-            run("Clear saved sessions…", Action::ClearSavedSessions).after_separator(),
+            run("Settings…", Action::OpenSettings).after_separator(),
+            run("Clear saved sessions…", Action::ClearSavedSessions),
         ]);
         Self::new(anchor, items)
     }
@@ -373,7 +376,7 @@ fn item_view(item: &MenuItem, selected: bool, look: Look) -> Element<'_, Message
                 } else {
                     Color { a: 0.4, ..look.fg }
                 },
-                border: Border::default().rounded(4),
+                border: Border::default().rounded(6),
                 ..button::Style::default()
             }
         })
@@ -440,6 +443,7 @@ fn menu_box(menu: &ContextMenu, look: Look) -> Element<'_, Message> {
             });
             let apply = button(text("Apply").size(13))
                 .padding([4, 10])
+                .style(crate::style::primary)
                 .on_press_maybe(typed.map(|_| Message::MenuSubmit));
             col = col.push(
                 column![
@@ -515,23 +519,23 @@ pub(crate) fn from_hsv(h: f32, s: f32, v: f32) -> RgbColor {
     }
 }
 
-/// Floating panels (menus, the profile picker): raised surface, thin border, soft shadow.
+/// Floating panels (menus): the surface, the medium elevation (a ring and ambient darkness).
 pub(crate) fn panel_style(look: Look) -> container::Style {
     container::Style {
-        background: Some(look.bg.into()),
+        background: Some(look.surface.into()),
         text_color: Some(look.fg),
         border: Border {
-            color: look.border,
+            color: crate::tokens::N700,
             width: 1.0,
-            radius: 6.0.into(),
+            radius: crate::tokens::R_PANE.into(),
         },
         shadow: iced::Shadow {
             color: Color {
-                a: 0.35,
+                a: 0.55,
                 ..Color::BLACK
             },
-            offset: iced::Vector::new(0.0, 4.0),
-            blur_radius: 12.0,
+            offset: iced::Vector::new(0.0, 6.0),
+            blur_radius: 18.0,
         },
         ..container::Style::default()
     }

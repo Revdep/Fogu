@@ -318,6 +318,10 @@ pub struct Tab {
     pub background: TabBackground,
     /// A profile editor tab: no panes, the editor page instead of the split container.
     pub editor: Option<Box<ProfileEditor>>,
+    /// The settings tab: no panes, the settings page instead.
+    pub settings: Option<Box<crate::settings::Settings>>,
+    /// A start page tab: no panes, the start page instead.
+    pub welcome: Option<Box<crate::welcome::Welcome>>,
     /// "Maximize pane": the one-pane tree shown instead of `layout` until the layout or the
     /// focus changes.
     pub solo: Option<SplitTree<PaneId>>,
@@ -337,6 +341,8 @@ impl Tab {
             panes: BTreeMap::from([(pane.id, pane)]),
             sftp: None,
             editor: None,
+            settings: None,
+            welcome: None,
             solo: None,
         }
     }
@@ -344,6 +350,30 @@ impl Tab {
     /// A "Profile: …" tab showing `editor`. It has no pane (`layout` holds a placeholder id no
     /// pane ever gets) and the built-in profile, so the tab menu's "Save to profile" is off.
     pub fn editor(id: TabId, editor: ProfileEditor) -> Self {
+        Self {
+            editor: Some(Box::new(editor)),
+            ..Self::page(id)
+        }
+    }
+
+    /// The "Settings" tab: no pane, like an editor tab.
+    pub fn settings(id: TabId, settings: crate::settings::Settings) -> Self {
+        Self {
+            settings: Some(Box::new(settings)),
+            ..Self::page(id)
+        }
+    }
+
+    /// A "New tab" start page: no pane, like a settings tab.
+    pub fn welcome(id: TabId) -> Self {
+        Self {
+            welcome: Some(Box::default()),
+            ..Self::page(id)
+        }
+    }
+
+    /// A tab without panes, for a page.
+    fn page(id: TabId) -> Self {
         let none = PaneId(0);
         Self {
             id,
@@ -355,9 +385,16 @@ impl Tab {
             sftp: None,
             profile: Profile::default_shell(),
             background: TabBackground::None,
-            editor: Some(Box::new(editor)),
+            editor: None,
+            settings: None,
+            welcome: None,
             solo: None,
         }
+    }
+
+    /// A page (profile editor, settings) instead of terminals.
+    pub fn is_page(&self) -> bool {
+        self.editor.is_some() || self.settings.is_some() || self.welcome.is_some()
     }
 
     /// The focused pane.
@@ -374,6 +411,12 @@ impl Tab {
     pub fn title(&self) -> &str {
         if let Some(editor) = &self.editor {
             return self.title_override.as_deref().unwrap_or(&editor.title);
+        }
+        if self.settings.is_some() {
+            return self.title_override.as_deref().unwrap_or("Settings");
+        }
+        if self.welcome.is_some() {
+            return self.title_override.as_deref().unwrap_or("New tab");
         }
         let Some(pane) = self.focused_pane() else {
             return self.title_override.as_deref().unwrap_or_default();

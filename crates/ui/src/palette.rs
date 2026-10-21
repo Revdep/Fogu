@@ -101,17 +101,21 @@ fn set(table: &mut Palette, index: usize, value: Rgb) {
     }
 }
 
-/// The window chrome's colours (menus, panels, title bar), derived from the terminal scheme so
-/// dark and light schemes both work.
+/// The window chrome's colours (menus, panels, title bar): the Nocturne tokens on dark schemes,
+/// derived from the terminal scheme on light ones.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Look {
-    /// Panels, menus, the picker, the sidebar.
+    /// Side panels: the sidebar, SFTP, editor columns.
     pub(crate) bg: iced::Color,
+    /// Cards, menus, dialogs, inputs, the picker.
+    pub(crate) surface: iced::Color,
     pub(crate) fg: iced::Color,
     /// Muted text.
     pub(crate) dim: iced::Color,
-    /// The scheme's bright blue: links, selection, active toggles.
+    /// Lines, dots, outlines, active toggles; never a large fill.
     pub(crate) accent: iced::Color,
+    /// The accent for icons and text on the dark grounds (accent-400 in Nocturne).
+    pub(crate) accent_hi: iced::Color,
     /// The terminal background (the active tab).
     pub(crate) base: iced::Color,
     /// The title / tab bar.
@@ -122,23 +126,47 @@ pub(crate) struct Look {
     pub(crate) hover: iced::Color,
     /// Close-button hover, errors.
     pub(crate) danger: iced::Color,
+    /// The Nocturne tokens are in use (a dark scheme).
+    pub(crate) dark: bool,
 }
 
 impl Look {
     pub(crate) fn new(colors: &Colors) -> Self {
+        use crate::tokens as t;
         let base = to_iced(colors.background());
         let fg = to_iced(colors.foreground());
         let dark = base.r * 0.299 + base.g * 0.587 + base.b * 0.114 < 0.5;
+        if dark {
+            return Self {
+                bg: t::PANEL,
+                surface: t::SURFACE,
+                fg: t::TEXT,
+                dim: t::N500,
+                accent: t::ACCENT,
+                accent_hi: t::A400,
+                base,
+                raised: t::BAR,
+                // Opaque: on a see-through window a translucent line shows the desktop.
+                border: mix(t::PANEL, t::TEXT, 0.16),
+                hover: t::alpha(t::TEXT, 0.07),
+                danger: t::DANGER,
+                dark,
+            };
+        }
+        let accent = to_iced(colors.resolve(Color::Named(NamedColor::BrightBlue), false));
         Self {
             bg: mix(base, fg, 0.06),
+            surface: mix(base, fg, 0.03),
             fg,
             dim: mix(fg, base, 0.45),
-            accent: to_iced(colors.resolve(Color::Named(NamedColor::BrightBlue), false)),
+            accent,
+            accent_hi: accent,
             base,
-            raised: mix(base, iced::Color::BLACK, if dark { 0.3 } else { 0.06 }),
+            raised: mix(base, iced::Color::BLACK, 0.06),
             border: mix(base, fg, 0.18),
             hover: iced::Color { a: 0.10, ..fg },
-            danger: iced::Color::from_rgb8(0xE5, 0x48, 0x4D),
+            danger: t::DANGER,
+            dark,
         }
     }
 
@@ -149,7 +177,7 @@ impl Look {
         iced::Theme::custom(
             "fogu",
             iced::theme::Palette {
-                background: self.bg,
+                background: self.surface,
                 text: self.fg,
                 primary: self.accent,
                 success: ansi(NamedColor::Green),

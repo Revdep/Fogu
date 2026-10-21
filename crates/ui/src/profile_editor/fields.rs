@@ -148,6 +148,29 @@ fn range(id: FieldId) -> Option<(i64, i64)> {
     })
 }
 
+/// Where a −/+ press starts on an empty field: the built-in default the field shows (a
+/// `[profile_defaults]` override is not taken into account), else the range's low end.
+fn step_start(id: FieldId, lo: i64) -> i64 {
+    use fogu_core::config::ssh_opts::{
+        DEFAULT_AGENT_KEY_LIFETIME_S, DEFAULT_KEEPALIVE_COUNT_MAX, DEFAULT_KEEPALIVE_INTERVAL_MS,
+        DEFAULT_PROMPT_TIMEOUT_MS, DEFAULT_REUSE_LINGER_S, DEFAULT_SSH_PORT,
+    };
+    match id {
+        FieldId::Port => i64::from(DEFAULT_SSH_PORT),
+        FieldId::SocksPort => 1080,
+        FieldId::HttpPort => 8080,
+        FieldId::KeepaliveInterval => i64::try_from(DEFAULT_KEEPALIVE_INTERVAL_MS).unwrap_or(lo),
+        FieldId::KeepaliveCountMax => i64::from(DEFAULT_KEEPALIVE_COUNT_MAX),
+        FieldId::PromptTimeout => i64::try_from(DEFAULT_PROMPT_TIMEOUT_MS).unwrap_or(lo),
+        FieldId::ReadyTimeout => 20_000,
+        FieldId::AgentKeyLifetime => i64::from(DEFAULT_AGENT_KEY_LIFETIME_S),
+        FieldId::ReuseLinger => i64::from(DEFAULT_REUSE_LINGER_S),
+        FieldId::Weight => 0,
+        FieldId::BgOpacity => 85,
+        _ => lo,
+    }
+}
+
 fn opt(text: &str) -> Option<String> {
     let text = text.trim();
     (!text.is_empty()).then(|| text.to_owned())
@@ -174,11 +197,27 @@ impl ProfileEditor {
         if value == FieldValue::Browse {
             return Effect::Browse(id);
         }
-        if let (Some(bounds), FieldValue::Text(text)) = (range(id), &value) {
-            if let Ok(number) = self.number(id, text, bounds) {
-                self.set_number(id, number);
+        if let Some((lo, hi)) = range(id) {
+            match &value {
+                FieldValue::Text(text) => {
+                    if let Ok(number) = self.number(id, text, (lo, hi)) {
+                        self.set_number(id, number);
+                    }
+                    return Effect::None;
+                }
+                FieldValue::Step(by) => {
+                    // An inherited (empty) field steps from the built-in default it shows.
+                    let current = self
+                        .current_number(id)
+                        .unwrap_or_else(|| step_start(id, lo));
+                    let number = current.saturating_add(i64::from(*by)).clamp(lo, hi);
+                    self.texts.remove(&id);
+                    self.errors.remove(&id);
+                    self.set_number(id, Some(number));
+                    return Effect::None;
+                }
+                _ => {}
             }
-            return Effect::None;
         }
         if self.apply_common(id, &value) || self.apply_local(id, &value) {
             return Effect::None;
@@ -247,6 +286,41 @@ impl ProfileEditor {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// The explicit value behind a number field (`None` means inherited / empty).
+    fn current_number(&self, id: FieldId) -> Option<i64> {
+        if id == FieldId::BgOpacity {
+            return match &self.draft.background {
+                Some(Background::Image { opacity, .. }) => Some((opacity * 100.0).round() as i64),
+                _ => None,
+            };
+        }
+        let ProfileKind::Ssh(ssh) = &self.draft.kind else {
+            return None;
+        };
+        match id {
+            FieldId::Port => ssh.port.map(i64::from),
+            FieldId::SocksPort => ssh.socks_proxy_port.map(i64::from),
+            FieldId::HttpPort => ssh.http_proxy_port.map(i64::from),
+            FieldId::KeepaliveInterval => ssh.keepalive_interval.and_then(|n| n.try_into().ok()),
+            FieldId::PromptTimeout => ssh.prompt_timeout.and_then(|n| n.try_into().ok()),
+            FieldId::ReadyTimeout => ssh.ready_timeout.and_then(|n| n.try_into().ok()),
+            FieldId::KeepaliveCountMax => ssh.keepalive_count_max.map(i64::from),
+            FieldId::AgentKeyLifetime => ssh.agent_key_lifetime.map(i64::from),
+            FieldId::ReuseLinger => ssh.reuse_linger.map(i64::from),
+            FieldId::Weight => ssh.weight.map(i64::from),
+            FieldId::Forward(row, col) => ssh
+                .forwarded_ports
+                .as_ref()
+                .and_then(|forwards| forwards.get(row))
+                .and_then(|forward| match col {
+                    ForwardCol::Port => Some(i64::from(forward.port)),
+                    ForwardCol::TargetPort => Some(i64::from(forward.target_port)),
+                    _ => None,
+                }),
+            _ => None,
         }
     }
 

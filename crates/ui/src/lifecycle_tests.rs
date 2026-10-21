@@ -184,7 +184,7 @@ fn enter_confirms_and_escape_cancels_a_pending_paste() {
     send(&mut app, enter());
     assert!(app.pending_paste.is_none(), "Enter pastes");
     send(&mut app, paste("a\nb"));
-    app.on_escape();
+    let _ = app.on_escape();
     assert!(app.pending_paste.is_none(), "Escape cancels");
 }
 

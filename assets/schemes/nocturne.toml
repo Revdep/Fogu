@@ -1,0 +1,14 @@
+# "Nocturne", the colours of the Nocturne chrome.
+name = "Nocturne"
+fg = "#cfd3e5"
+bg = "#161826"
+cursor = "#b5abfc"
+cursor_text = "#161826"
+selection_bg = "#423a6a"
+selection_fg = "#f3f5fe"
+ansi = [
+    "#292b31", "#ff615a", "#b1e969", "#ebd99c",
+    "#968ae0", "#e86aff", "#82fff7", "#dedacf",
+    "#75798c", "#f58c80", "#ddf88f", "#eee5b2",
+    "#b5abfc", "#ddaaff", "#b7fff9", "#f3f5fe",
+]
