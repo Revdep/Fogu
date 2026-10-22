@@ -1,6 +1,8 @@
 name: ci
 on:
+  # other branches are checked by their pull_request run; a push trigger would run them twice
   push:
+    branches: [main, work]
   pull_request:
   schedule:
     - cron: "17 3 * * *" # nightly: fuzz-smoke
