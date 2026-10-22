@@ -442,23 +442,30 @@ pub fn validate_name(name: &str) -> Result<&str, NameError> {
 pub fn display_name(name: &str) -> String {
     use std::fmt::Write as _;
     let mut out = String::with_capacity(name.len().min(4 * DISPLAY_NAME_MAX_CHARS));
-    for (i, c) in name.chars().enumerate() {
-        if i == DISPLAY_NAME_MAX_CHARS {
-            out.push('…');
-            break;
-        }
+    // the limit counts shown chars: an escape is several of them (`\u{202e}` is 8)
+    let mut shown = 0;
+    let mut piece = String::new();
+    for c in name.chars() {
+        piece.clear();
         match c {
-            '\\' => out.push_str("\\\\"),
+            '\\' => piece.push_str("\\\\"),
             c if u32::from(c) < 0x100 && c.is_control() => {
-                let _infallible = write!(out, "\\x{:02x}", u32::from(c));
+                let _infallible = write!(piece, "\\x{:02x}", u32::from(c));
             }
             c if c.is_control()
                 || matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}') =>
             {
-                let _infallible = write!(out, "\\u{{{:04x}}}", u32::from(c));
+                let _infallible = write!(piece, "\\u{{{:04x}}}", u32::from(c));
             }
-            c => out.push(c),
+            c => piece.push(c),
         }
+        let len = piece.chars().count();
+        if shown + len > DISPLAY_NAME_MAX_CHARS {
+            out.push('…');
+            break;
+        }
+        out.push_str(&piece);
+        shown += len;
     }
     out
 }
@@ -487,6 +494,19 @@ mod tests {
         let shown = display_name(&long);
         assert_eq!(shown.chars().count(), DISPLAY_NAME_MAX_CHARS + 1);
         assert!(shown.ends_with('…'));
+        // escapes count at their shown width (nightly fuzz find): never cut inside one
+        for raw in [
+            "\u{202e}".repeat(DISPLAY_NAME_MAX_CHARS),
+            "\\".repeat(DISPLAY_NAME_MAX_CHARS),
+        ] {
+            let shown = display_name(&raw);
+            assert!(
+                shown.chars().count() <= DISPLAY_NAME_MAX_CHARS + 1,
+                "{}",
+                shown.len()
+            );
+            assert!(shown.ends_with('…'));
+        }
     }
 
     #[test]
