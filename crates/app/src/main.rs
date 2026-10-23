@@ -27,7 +27,12 @@ const LOG_MAX_BYTES: u64 = 4 * 1024 * 1024;
 fn main() -> fogu_ui::Result {
     harden_process();
     let cli = Cli::parse();
-    cli::reexec_with_env(&cli);
+    // Only the one setting the re-exec needs; loaded again below with logging and notices.
+    let wayland_drops = config::load(&config::config_dir(cli.config_dir.as_deref()))
+        .0
+        .sftp
+        .wayland_drag_and_drop;
+    cli::reexec_with_env(&cli, wayland_drops);
     let state_dir = state_dir();
     crash::install(state_dir.as_ref().ok().cloned());
     init_logging(&state_dir);

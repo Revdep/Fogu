@@ -36,6 +36,10 @@ where
     for key in REMOVED {
         env.remove(OsStr::new(key));
     }
+    // Fogu itself may run on XWayland for file drops; its shells stay on Wayland (`wl-copy`).
+    if let Some(display) = env.remove(OsStr::new(fogu_core::platform::KEPT_WAYLAND_DISPLAY)) {
+        env.insert("WAYLAND_DISPLAY".into(), display);
+    }
     for (key, value) in [
         ("TERM", "xterm-256color"),
         ("COLORTERM", "truecolor"),
@@ -115,6 +119,27 @@ fn expand(value: &str, env: &BTreeMap<OsString, OsString>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shells_get_the_wayland_display_back() {
+        let parent = [
+            (fogu_core::platform::KEPT_WAYLAND_DISPLAY, "wayland-1"),
+            ("DISPLAY", ":1"),
+        ]
+        .map(|(k, v)| (OsString::from(k), OsString::from(v)));
+        let env = build_env(parent, &BTreeMap::new());
+        assert_eq!(
+            env.get(OsStr::new("WAYLAND_DISPLAY")),
+            Some(&OsString::from("wayland-1"))
+        );
+        assert!(!env.contains_key(OsStr::new(fogu_core::platform::KEPT_WAYLAND_DISPLAY)));
+        assert_eq!(env.get(OsStr::new("DISPLAY")), Some(&OsString::from(":1")));
+        let plain = build_env([("DISPLAY".into(), ":1".into())], &BTreeMap::new());
+        assert!(
+            !plain.contains_key(OsStr::new("WAYLAND_DISPLAY")),
+            "X11 sessions untouched"
+        );
+    }
 
     #[test]
     fn lang_follows_the_system_locale_if_installed() {

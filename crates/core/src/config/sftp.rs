@@ -47,6 +47,9 @@ pub struct SftpCfg {
     /// always `0644`, so a `.desktop` file, script or `AppImage` from the server cannot be run
     /// by a double-click in a file manager.
     pub keep_executable_bit: bool,
+    /// Linux/BSD under Wayland: start Fogu on `XWayland`, where files can be dropped onto the
+    /// panel (winit 0.30 has no Wayland drops). Off: native Wayland, no drops. Read at start-up.
+    pub wayland_drag_and_drop: bool,
 }
 
 impl Default for SftpCfg {
@@ -67,6 +70,7 @@ impl Default for SftpCfg {
             max_download_bytes: None,
             free_space_reserve_bytes: 1 << 30,
             keep_executable_bit: false,
+            wayland_drag_and_drop: false,
         }
     }
 }

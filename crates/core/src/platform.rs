@@ -13,6 +13,10 @@ use std::path::{Component, Path, PathBuf, Prefix};
 /// The application's directory name under the platform's config/state root.
 pub const APP_DIR: &str = "fogu";
 
+/// Where Fogu keeps the session's `WAYLAND_DISPLAY` after restarting itself on `XWayland` (file
+/// drops need X11): the shells it starts get it back, so they still reach the compositor.
+pub const KEPT_WAYLAND_DISPLAY: &str = "FOGU_WAYLAND_DISPLAY";
+
 /// The user's home directory.
 #[must_use]
 pub fn home_dir() -> Option<PathBuf> {
