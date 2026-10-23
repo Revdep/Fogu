@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Settings → SFTP → *Enable drag & drop on Wayland* (`[sftp] wayland_drag_and_drop`, off by
+  default): Fogu opens on XWayland, where files can be dropped onto the SFTP panel (on HiDPI screens
+  it may look small or blurry); local shells and the apps it opens keep `WAYLAND_DISPLAY`
+  (`wl-copy`, Wayland apps). Read at start-up.
+
 ## 0.1.7 (2026-10-25)
 
 <!-- fogu-update: {"schema":1,"from":">=0.1.6, <0.2.0"} -->

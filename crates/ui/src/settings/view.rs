@@ -614,36 +614,46 @@ fn sftp<'a>(s: &'a Settings, cx: &Ctx<'a>) -> Form<'a> {
         &s.shown(FieldId::MaxDownload, max),
         "no limit",
     );
+    let mut panel = vec![
+        toggle(FieldId::ShowHidden, "Show dot files", f.show_hidden),
+        num(
+            s,
+            look,
+            FieldId::PanelWidth,
+            "Width (share of the tab)",
+            f.panel_width,
+        ),
+        toggle(
+            FieldId::FollowCwd,
+            "Follow the terminal's directory",
+            f.follow_cwd,
+        ),
+        num(
+            s,
+            look,
+            FieldId::TransferLinger,
+            "Finished transfers stay (s)",
+            f.transfer_linger_secs,
+        ),
+    ];
+    // Only where Wayland and XWayland exist; macOS and Windows take drops natively.
+    if cfg!(all(unix, not(target_os = "macos"))) {
+        panel.push(forms::note(
+            toggle(
+                FieldId::WaylandDragDrop,
+                "Enable drag & drop on Wayland",
+                f.wayland_drag_and_drop,
+            ),
+            "Fogu will open on XWayland and may look small or blurry on HiDPI screens. \
+             Restart required.",
+            WARN,
+        ));
+    }
     column![
         text("SFTP panels opened from now on use these values.")
             .size(13)
             .color(look.dim),
-        forms::section(
-            look,
-            "Panel",
-            vec![
-                toggle(FieldId::ShowHidden, "Show dot files", f.show_hidden),
-                num(
-                    s,
-                    look,
-                    FieldId::PanelWidth,
-                    "Width (share of the tab)",
-                    f.panel_width
-                ),
-                toggle(
-                    FieldId::FollowCwd,
-                    "Follow the terminal's directory",
-                    f.follow_cwd
-                ),
-                num(
-                    s,
-                    look,
-                    FieldId::TransferLinger,
-                    "Finished transfers stay (s)",
-                    f.transfer_linger_secs
-                ),
-            ]
-        ),
+        forms::section(look, "Panel", panel),
         forms::section(
             look,
             "Downloads",

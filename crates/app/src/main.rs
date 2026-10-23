@@ -53,11 +53,13 @@ fn main() -> fogu_ui::Result {
             }
         }
     }
-    cli::reexec_with_env(&cli);
+    // Read once, before the re-exec that one setting decides; reported once logging is up.
+    let (config, config_err) = config::load(&config::config_dir(cli.config_dir.as_deref()));
+    cli::reexec_with_env(&cli, config.sftp.wayland_drag_and_drop);
     let state_dir = state_dir();
     crash::install(state_dir.as_ref().ok().cloned());
     init_logging(&state_dir);
-    let (config, notices) = load_config(&cli);
+    let notices = config_notices(&config, config_err);
     let options = RunOptions {
         notices,
         exit_after_first_frame: cli.exit_after_first_frame,
@@ -111,12 +113,13 @@ fn make_undumpable() -> rustix::io::Result<()> {
     )
 }
 
-/// Loads `config.toml` from `--config-dir` or `$XDG_CONFIG_HOME/fogu`. A missing file is
-/// normal; any other failure (bad TOML, schema mismatch) falls back to `Config::default()`.
-/// Everything the user should know becomes a startup toast as well as a log line.
-fn load_config(cli: &Cli) -> (fogu_core::Config, Vec<Notification>) {
-    let dir = config::config_dir(cli.config_dir.as_deref());
-    let (loaded, err) = config::load(&dir);
+/// What the user should know about `config.toml` (from `--config-dir` or `$XDG_CONFIG_HOME/fogu`),
+/// as startup toasts and log lines. A missing file is normal; any other failure (bad TOML, schema
+/// mismatch) already fell back to `Config::default()` in [`config::load`].
+fn config_notices(
+    loaded: &fogu_core::Config,
+    err: Option<config::ConfigError>,
+) -> Vec<Notification> {
     let mut notices = Vec::new();
     if let Some(err) = err {
         tracing::error!(error = %err, "failed to load config; using defaults");
@@ -125,14 +128,14 @@ fn load_config(cli: &Cli) -> (fogu_core::Config, Vec<Notification>) {
                 .detail(err.to_string()),
         );
     }
-    for issue in config::validate(&loaded) {
+    for issue in config::validate(loaded) {
         tracing::warn!(%issue, "config issue");
         // The UI reports an unknown colour scheme itself, when it falls back.
         if !matches!(issue, ConfigIssue::UnknownColorScheme(_)) {
             notices.push(Notification::new(Level::Warn, "Config issue").detail(issue.to_string()));
         }
     }
-    (loaded, notices)
+    notices
 }
 
 /// stderr + `fogu.log` in the state directory ([`open_log`]); `log` records are bridged by

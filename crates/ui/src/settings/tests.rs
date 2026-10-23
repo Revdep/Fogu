@@ -368,3 +368,18 @@ fn the_config_file_page_saves_only_text_that_loads_and_applies_it() {
     settings_msg(&mut app, SettingsMsg::FileRevert);
     assert!(page(&mut app).file.text().contains("wheel_lines = 9"));
 }
+
+#[test]
+fn wayland_drag_and_drop_is_off_by_default_and_written_when_turned_on() {
+    let t = tmp();
+    let mut app = opened(&t);
+    assert!(!app.config.sftp.wayland_drag_and_drop);
+    field(&mut app, FieldId::WaylandDragDrop, FieldValue::Bool(true));
+    assert!(
+        file(&t).contains("wayland_drag_and_drop = true"),
+        "{}",
+        file(&t)
+    );
+    let (back, _) = load(&t.0);
+    assert!(back.sftp.wayland_drag_and_drop);
+}
