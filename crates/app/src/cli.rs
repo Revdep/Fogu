@@ -100,19 +100,26 @@ impl Cli {
 }
 
 /// Environment variables iced and the GPU driver read at start-up: `ICED_BACKEND=tiny-skia` for
-/// `--software-render`, and on Linux [`MESA_BGRA8_FIRST`]. Setting one in-process is `unsafe`
-/// (denied outside `fogu_core::winsec`), so the process re-executes itself once with them set.
-/// Returns only if no re-exec was needed (or it failed, which is logged and ignored).
-pub fn reexec_with_env(cli: &Cli) {
-    let mut wanted = Vec::new();
+/// `--software-render`, and on Linux [`MESA_BGRA8_FIRST`]; plus, when `wayland_drops` (the
+/// `[sftp] wayland_drag_and_drop` setting), the move to X11 of [`x11_switch`]. Setting one
+/// in-process is `unsafe` (denied outside `fogu_core::winsec`), so the process re-executes itself
+/// once with them set. Returns only if no re-exec was needed (or it failed, which is logged and
+/// ignored).
+pub fn reexec_with_env(cli: &Cli, wayland_drops: bool) {
+    let mut wanted: Vec<(&str, OsString)> = Vec::new();
     if cli.software_render {
-        wanted.push((BACKEND_ENV, "tiny-skia"));
+        wanted.push((BACKEND_ENV, "tiny-skia".into()));
     }
     #[cfg(target_os = "linux")]
-    wanted.push((MESA_BGRA8_FIRST, "true"));
-    if wanted
-        .iter()
-        .all(|(key, value)| std::env::var_os(key).is_some_and(|v| v == *value))
+    wanted.push((MESA_BGRA8_FIRST, "true".into()));
+    let x11 = x11_switch(wayland_drops);
+    if let Some(display) = &x11 {
+        wanted.push((fogu_core::platform::KEPT_WAYLAND_DISPLAY, display.clone()));
+    }
+    if x11.is_none()
+        && wanted
+            .iter()
+            .all(|(key, value)| std::env::var_os(key).is_some_and(|v| v == *value))
     {
         return;
     }
@@ -122,6 +129,9 @@ pub fn reexec_with_env(cli: &Cli) {
     };
     let mut command = Command::new(exe);
     command.args(std::env::args_os().skip(1)).envs(wanted);
+    if x11.is_some() {
+        command.env_remove(WAYLAND_ENV);
+    }
     #[cfg(unix)]
     {
         let err = command.exec();
@@ -145,6 +155,48 @@ pub fn reexec_with_env(cli: &Cli) {
             }
         }
     }
+}
+
+/// Environment variable winit picks its backend from: set and non-empty means Wayland.
+const WAYLAND_ENV: &str = "WAYLAND_DISPLAY";
+
+/// winit 0.30 has no Wayland drops, so under Wayland the SFTP panel cannot take files dropped
+/// from a file manager, while X11 can. `Some(the Wayland display)` when Fogu should restart on
+/// `XWayland`: the user `enabled` it, the session is Wayland and its X server answers. The display
+/// is kept in [`fogu_core::platform::KEPT_WAYLAND_DISPLAY`] so local shells still get it.
+fn x11_switch(enabled: bool) -> Option<OsString> {
+    #[cfg(unix)]
+    {
+        let display = std::env::var_os(WAYLAND_ENV).filter(|v| enabled && !v.is_empty())?;
+        let x_server = std::env::var("DISPLAY")
+            .ok()
+            .and_then(|display| x_socket(&display))
+            .is_some_and(|socket| answers(&socket));
+        x_server.then_some(display)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = enabled;
+        None
+    }
+}
+
+/// The socket of a local X display (`:1` or `:1.0` is `/tmp/.X11-unix/X1`); `None` for a
+/// remote or malformed `DISPLAY`.
+#[cfg(unix)]
+fn x_socket(display: &str) -> Option<PathBuf> {
+    let number = display.strip_prefix(':')?.split('.').next()?;
+    (!number.is_empty() && number.bytes().all(|b| b.is_ascii_digit()))
+        .then(|| PathBuf::from(format!("/tmp/.X11-unix/X{number}")))
+}
+
+/// Whether something listens on `socket`. A file left behind by a crashed `XWayland` exists but
+/// refuses connections; starting on X11 there would make winit panic before the first frame.
+/// shortcut: a blocking connect; an X server hung with a full backlog delays start-up, as it
+/// would delay any X client.
+#[cfg(unix)]
+fn answers(socket: &std::path::Path) -> bool {
+    std::os::unix::net::UnixStream::connect(socket).is_ok()
 }
 
 #[cfg(test)]
@@ -172,6 +224,34 @@ mod tests {
         assert_eq!(eq.config_dir, Some(PathBuf::from("/tmp/y")));
         let none = parse(&[]).unwrap();
         assert!(none.config_dir.is_none() && !none.software_render && !none.no_recovery);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn x_socket_from_display() {
+        let sock = |d| x_socket(d).map(|p| p.display().to_string());
+        assert_eq!(sock(":1").as_deref(), Some("/tmp/.X11-unix/X1"));
+        assert_eq!(sock(":0.0").as_deref(), Some("/tmp/.X11-unix/X0"));
+        assert_eq!(sock("host:0"), None);
+        assert_eq!(sock(":"), None);
+        assert_eq!(sock(":a"), None);
+        assert_eq!(sock(""), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_stale_x_socket_does_not_answer() {
+        let dir = std::env::temp_dir().join(format!("fogu-x-socket-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let socket = dir.join("X9");
+        let _ = std::fs::remove_file(&socket);
+        let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        assert!(answers(&socket), "a live server answers");
+        drop(listener);
+        assert!(socket.exists(), "the file stays behind, as after a crash");
+        assert!(!answers(&socket), "but nothing answers on it");
+        assert!(!answers(&dir.join("missing")));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

@@ -104,6 +104,7 @@ pub enum FieldId {
     MaxDownload,
     FreeSpace,
     KeepExecutable,
+    WaylandDragDrop,
     ReadSshConfig,
     RecoveryEnabled,
     RecoveryScrollback,
@@ -273,6 +274,7 @@ impl Settings {
                 s.free_space_reserve_bytes = number(v, s.free_space_reserve_bytes, 0, u64::MAX, 1)?;
             }
             F::KeepExecutable => s.keep_executable_bit = on(v)?,
+            F::WaylandDragDrop => s.wayland_drag_and_drop = on(v)?,
             F::ReadSshConfig => cfg.ssh.read_ssh_config = on(v)?,
             F::RecoveryEnabled => cfg.recovery.enabled = on(v)?,
             F::RecoveryScrollback => cfg.recovery.restore_scrollback = on(v)?,

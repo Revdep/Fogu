@@ -309,3 +309,18 @@ fn a_message_that_writes_the_config_first_takes_in_an_external_edit() {
     let _ = app.update(Message::Settings(SettingsMsg::Page(Page::Terminal)));
     assert!(app.config.profiles.iter().any(|p| p.id.0 == "late"));
 }
+
+#[test]
+fn wayland_drag_and_drop_is_off_by_default_and_written_when_turned_on() {
+    let t = tmp();
+    let mut app = opened(&t);
+    assert!(!app.config.sftp.wayland_drag_and_drop);
+    field(&mut app, FieldId::WaylandDragDrop, FieldValue::Bool(true));
+    assert!(
+        file(&t).contains("wayland_drag_and_drop = true"),
+        "{}",
+        file(&t)
+    );
+    let (back, _) = load(&t.0);
+    assert!(back.sftp.wayland_drag_and_drop);
+}

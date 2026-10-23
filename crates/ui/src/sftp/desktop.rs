@@ -105,9 +105,15 @@ impl App {
                 return Task::none();
             }
             self.desktop.hinted = true;
-            let note = Notification::new(Level::Info, "Drag and drop").detail(
-                "Dropping files onto the panel needs X11 for now \u{2014} use Upload\u{2026}",
-            );
+            // On but still on Wayland: not restarted yet, or no XWayland answered at start-up.
+            let detail = if self.config.sftp.wayland_drag_and_drop {
+                "Dropping files onto the panel needs X11: restart Fogu (XWayland must be running), \
+                 or use Upload\u{2026}"
+            } else {
+                "Dropping files onto the panel needs X11 for now: turn on Settings \u{2192} SFTP \u{2192} \
+                 Enable drag & drop on Wayland, or use Upload\u{2026}"
+            };
+            let note = Notification::new(Level::Info, "Drag and drop").detail(detail);
             self.notify(note)
         }
         #[cfg(windows)]
