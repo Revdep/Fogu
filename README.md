@@ -15,6 +15,15 @@
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-red">
 </p>
 
+- [What it is](#what-it-is)
+- [Install](#install)
+  - [Linux](#linux) · [macOS](#macos) · [Windows](#windows-alpha)
+  - [From source](#install-from-source): [Linux](#linux-from-source) · [macOS](#macos-from-source)
+  - [Uninstall](#uninstall)
+- [Features](#features)
+- [Contributing and license](#contributing-and-license)
+- [Optional updates](#optional-updates)
+
 ## What it is
 
 A terminal for people who live on remote servers. Click a host in the sidebar and you are in a
@@ -69,6 +78,7 @@ and starts in about a tenth of a second. *Fogu* means *fire* in Sardinian.
 </details>
 
 ## Install
+Prebuilt downloads come from the [Releases page](https://github.com/Revdep/Fogu/releases).
 
 ### Linux
 
@@ -106,12 +116,21 @@ Needs glibc 2.28 or newer (Debian 10, Ubuntu 20.04, RHEL 8, Fedora, Arch Linux).
 
 `curl`, which Fogu also uses for its updates, comes with macOS.
 
+Apple Silicon (M1 and later):
+
 ```bash
 curl -fsSLo Fogu.zip https://github.com/Revdep/Fogu/releases/latest/download/Fogu-macos-aarch64.zip
-mkdir -p ~/Applications && ditto -x -k Fogu.zip ~/Applications && rm Fogu.zip
+mkdir -p ~/Applications && tar -xf Fogu.zip -C ~/Applications && rm Fogu.zip
 ```
 
-On Intel Macs use `macos-x86_64` instead of `macos-aarch64`. Fogu then shows up in Applications.
+Intel:
+
+```bash
+curl -fsSLo Fogu.zip https://github.com/Revdep/Fogu/releases/latest/download/Fogu-macos-x86_64.zip
+mkdir -p ~/Applications && tar -xf Fogu.zip -C ~/Applications && rm Fogu.zip
+```
+
+Fogu then shows up in Applications.
 To start it as `fogu` from a terminal too (a wrapper, not a symlink, so macOS treats it as the app):
 
 ```bash
@@ -119,9 +138,19 @@ mkdir -p ~/.local/bin && printf '#!/bin/sh\nexec ~/Applications/Fogu.app/Content
 chmod 755 ~/.local/bin/fogu
 ```
 
-Downloaded with a browser instead of `curl`? Fogu is not notarized by Apple, so unblock it first:
+Downloaded with a browser instead of `curl`? Double-clicking the zip fails (Archive Utility
+rejects the update signature at its start), so extract it in Terminal, then unblock Fogu, which is
+not notarized by Apple. Apple Silicon:
 
 ```bash
+mkdir -p ~/Applications && tar -xf ~/Downloads/Fogu-macos-aarch64.zip -C ~/Applications
+xattr -dr com.apple.quarantine ~/Applications/Fogu.app
+```
+
+Intel:
+
+```bash
+mkdir -p ~/Applications && tar -xf ~/Downloads/Fogu-macos-x86_64.zip -C ~/Applications
 xattr -dr com.apple.quarantine ~/Applications/Fogu.app
 ```
 
@@ -138,6 +167,8 @@ xattr -dr com.apple.quarantine ~/Applications/Fogu.app
 - **Cmd+Q** skips the final save: tabs come back, the last ~30 s of scrollback may not.
 
 </details>
+
+**Prefer to build from source? See [Install from source](#install-from-source).**
 
 ### Windows (alpha)
 
@@ -171,13 +202,18 @@ To remove it, delete that folder.
 
 </details>
 
-<details>
-<summary><b>From source, and uninstall</b></summary>
+### Install from source
+
+Install the prerequisites for your system first ([Linux](#linux-from-source), [macOS](#macos-from-source)), then:
 
 ```bash
 git clone https://github.com/Revdep/Fogu.git
 cd Fogu && ./scripts/install.sh
 ```
+
+On Windows, see [Good to know on Windows](#windows-alpha).
+
+#### Linux (from source)
 
 Needs [rustup](https://rustup.rs) (it picks the right Rust version). Plus, on Debian/Ubuntu:
 
@@ -191,19 +227,21 @@ on Arch Linux:
 sudo pacman -S --needed base-devel pkgconf systemd-libs libxkbcommon wayland curl
 ```
 
-and on macOS:
+#### macOS (from source)
 
 ```bash
-xcode-select --install
+xcode-select --install   # Apple's compiler and linker, needed to build Rust
+# skip the next two lines if `cargo --version` already works
+brew install rustup && rustup default stable
+echo 'export PATH="/opt/homebrew/opt/rustup/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 ```
 
-**Uninstall** (Linux and macOS):
+No Homebrew? Use [rustup.rs](https://rustup.rs) instead.
 
-```bash
-./scripts/install.sh --uninstall
-```
+### Uninstall
 
-</details>
+- **Built from source (Linux and macOS):** `./scripts/install.sh --uninstall`
+- **Prebuilt macOS:** delete `~/Applications/Fogu.app` and `~/.local/bin/fogu`
 
 ## Features
 
