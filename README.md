@@ -261,7 +261,8 @@ xcode-select --install
 - Upload, download, drag and drop, rename, delete, new folder, permissions
 - Dropping files from the file manager needs X11 on Linux: under Wayland, turn on Settings → SFTP
   → *Enable drag & drop on Wayland* and restart; Fogu then opens on XWayland, so on HiDPI screens
-  it may look small or blurry (its shells and the apps it opens stay on Wayland)
+  it may look small or blurry, KDE's window blur is off and input methods (IBus, fcitx5) need
+  `XMODIFIERS` (its shells and the apps it opens stay on Wayland)
 - Transfers with progress, cancel and resume
 - Hardened against hostile servers: sanitised names, disk-fill protection, downloaded files never
   executable, nothing is ever launched from a remote listing

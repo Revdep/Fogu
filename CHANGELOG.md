@@ -1,13 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Added
-- Settings → SFTP → *Enable drag & drop on Wayland* (`[sftp] wayland_drag_and_drop`, off by
-  default): Fogu opens on XWayland, where files can be dropped onto the SFTP panel (on HiDPI screens
-  it may look small or blurry); local shells and the apps it opens keep `WAYLAND_DISPLAY`
-  (`wl-copy`, Wayland apps). Read at start-up.
-
 ## 0.1.7 (2026-10-25)
 
 <!-- fogu-update: {"schema":1,"from":">=0.1.6, <0.2.0"} -->
@@ -22,6 +14,12 @@
   only when it loads (the error otherwise) and applies it at once; Revert reads it again.
 - Colour schemes: Catppuccin Latte, Frappé and Macchiato next to Mocha; Gruvbox Dark and Light;
   Nord; Tokyo Night, Storm, Moon and Day; One Dark.
+- Settings → SFTP → *Enable drag & drop on Wayland* (`[sftp] wayland_drag_and_drop`, off by
+  default): Fogu opens on XWayland, where files can be dropped onto the SFTP panel; local shells
+  and the apps it opens keep `WAYLAND_DISPLAY` (`wl-copy`, Wayland apps). Read at start-up. Under
+  XWayland, on HiDPI screens it may look small or blurry, KDE's window blur is off and input
+  methods need `XMODIFIERS`. By Nicola ([@Oginexe](https://github.com/Oginexe)) in
+  [#11](https://github.com/Revdep/Fogu/pull/11). Thank you!
 
 ### Changed
 - The Linux release runs on glibc 2.28 or newer (was 2.35): Debian 10, Ubuntu 20.04, RHEL 8.

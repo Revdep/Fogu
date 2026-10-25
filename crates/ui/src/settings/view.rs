@@ -644,8 +644,8 @@ fn sftp<'a>(s: &'a Settings, cx: &Ctx<'a>) -> Form<'a> {
                 "Enable drag & drop on Wayland",
                 f.wayland_drag_and_drop,
             ),
-            "Fogu will open on XWayland and may look small or blurry on HiDPI screens. \
-             Restart required.",
+            "Fogu will open on XWayland: on HiDPI screens it may look small or blurry, KDE's \
+             window blur is off and input methods (IBus, fcitx5) need XMODIFIERS. Restart required.",
             WARN,
         ));
     }
