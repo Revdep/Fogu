@@ -26,6 +26,13 @@
 - Nocturne is the default colour scheme, with new terminal colours, and Fogu Light is a new light
   palette; both are Fogu's own. Fogu Dark is gone: a config that names it gets Nocturne.
 
+### Fixed
+- macOS install: the README's commands use `tar`, since `ditto` and Archive Utility can't open the
+  release zip (its update signature comes first), with one block for Apple Silicon and one for
+  Intel. README menu and install-from-source restructured by Camilla
+  ([@camimurg](https://github.com/camimurg)) in [#15](https://github.com/Revdep/Fogu/pull/15).
+  Thank you!
+
 ### Security
 - Updated crypto-bigint to 0.7.6 to fix timing variability in integer operations used by SSH cryptography.
 
