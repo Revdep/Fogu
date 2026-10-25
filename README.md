@@ -15,6 +15,15 @@
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-red">
 </p>
 
+- [What it is](#what-it-is)
+- [Install](#install)
+  - [Linux](#linux) · [macOS](#macos) · [Windows](#windows-alpha)
+  - [From source](#install-from-source): [Linux](#linux-from-source) · [macOS](#macos-from-source)
+  - [Uninstall](#uninstall)
+- [Features](#features)
+- [Contributing and license](#contributing-and-license)
+- [Optional updates](#optional-updates)
+
 ## What it is
 
 A terminal for people who live on remote servers. Click a host in the sidebar and you are in a
@@ -69,6 +78,7 @@ and starts in about a tenth of a second. *Fogu* means *fire* in Sardinian.
 </details>
 
 ## Install
+Prebuilt downloads come from the [Releases page](https://github.com/Revdep/Fogu/releases).
 
 ### Linux
 
@@ -139,6 +149,8 @@ xattr -dr com.apple.quarantine ~/Applications/Fogu.app
 
 </details>
 
+**Prefer to build from source? See [Install from source](#install-from-source).**
+
 ### Windows (alpha)
 
 Windows 10 (1803 or later) or 11, x86_64; `curl.exe`, which Fogu also uses for its updates, comes
@@ -171,13 +183,18 @@ To remove it, delete that folder.
 
 </details>
 
-<details>
-<summary><b>From source, and uninstall</b></summary>
+### Install from source
+
+Install the prerequisites for your system first ([Linux](#linux-from-source), [macOS](#macos-from-source)), then:
 
 ```bash
 git clone https://github.com/Revdep/Fogu.git
 cd Fogu && ./scripts/install.sh
 ```
+
+On Windows, see [Good to know on Windows](#windows-alpha).
+
+#### Linux (from source)
 
 Needs [rustup](https://rustup.rs) (it picks the right Rust version). Plus, on Debian/Ubuntu:
 
@@ -191,19 +208,21 @@ on Arch Linux:
 sudo pacman -S --needed base-devel pkgconf systemd-libs libxkbcommon wayland curl
 ```
 
-and on macOS:
+#### macOS (from source)
 
 ```bash
-xcode-select --install
+xcode-select --install   # Apple's compiler and linker, needed to build Rust
+# skip the next two lines if `cargo --version` already works
+brew install rustup && rustup default stable
+echo 'export PATH="/opt/homebrew/opt/rustup/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 ```
 
-**Uninstall** (Linux and macOS):
+No Homebrew? Use [rustup.rs](https://rustup.rs) instead.
 
-```bash
-./scripts/install.sh --uninstall
-```
+### Uninstall
 
-</details>
+- **Built from source (Linux and macOS):** `./scripts/install.sh --uninstall`
+- **Prebuilt macOS:** delete `~/Applications/Fogu.app` and `~/.local/bin/fogu`
 
 ## Features
 
