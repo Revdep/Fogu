@@ -359,48 +359,13 @@ Fogu is [MIT](LICENSE)-licensed and builds on [Alacritty](https://github.com/ala
 
 ## Optional updates
 
-Official artifacts can be built with `FOGU_UPDATER=manual` (Settings › Updates) or
-`automatic` (also checks once a day, 60 seconds after startup). Local builds leave it unset.
-An update is downloaded and installed only after you review its notes and choose Install.
-Automatic notices appear at most twice per version, at least three days apart in different
-sessions. Restart saves recovery state and asks before closing running terminals.
+Fogu can tell you when a new version is out (Settings › Updates). It never installs anything on
+its own: you read what changed and choose Install, then it restarts with your tabs.
 
-Set `FOGU_DISABLE_UPDATER=1`, or place `.fogu-managed` beside the installed executable,
-to disable all updater network requests and replacement. Package managers redistributing an
-official artifact should install that marker; installations without it cannot always be identified.
-Linux user binaries and AppImages are the initial OTA targets. macOS and Windows remain manual
-until real N-1 → N updates pass on both Mac architectures and on Windows.
-Each native platform has one `OTA_VALIDATED` constant in `crates/ui/src/updater.rs`; it gates
-installation in release builds while manual checks remain available. Updates never request elevated privileges.
-
-Archives require an Ed25519 signature, the GitHub SHA-256 digest, and `SHA256SUMS`.
-These are the only authenticity and integrity checks: macOS bundles are signed ad-hoc,
-and Windows executables have no paid certificate.
-The public keys in `assets/updater` are **placeholders** and must be replaced before enabling OTA
-in a public release. Store the signing key in a protected release environment, keep the reserve
-private key offline, and require human approval for signing and changelog publication.
-On compromise, disable signing, revoke access, publish with the reserve key and remove the
-compromised public key from new clients. Older clients still trust it and may need manual recovery.
-
-Each release body must declare the source versions that support a direct upgrade, for example
-`<!-- fogu-update: {"schema":1,"from":">=0.1.6, <0.2.0"} -->`. The client validates this bounded
-contract with Rust semver requirements; missing/unknown contracts and excluded source versions
-require a manual or intermediate upgrade. The contract line is omitted from the displayed notes.
-The first client displays latest-release notes and links to the full changelog for skipped
-versions; it does not claim a complete cumulative history.
-Downloads go through the system's `curl` (HTTPS only, its `https_proxy`/`NO_PROXY` environment and
-certificate store), with size limits, a total timeout and a 30-second idle timeout; without
-`curl` the Updates page asks to install it or to download Fogu from the release page.
-Linux archives accept ordinary files/directories and reject extended GNU/PAX TAR headers.
-Replacement uses sibling staging and a best-effort rollback. Forced termination between renames
-can leave the old binary in `.fogu-update-*/previous`; recover it manually if the destination is
-missing. Commit failures retain the staging directory. No power-loss guarantee is made.
-Release withdrawal is checked again before commit; it cannot revoke a commit already in progress.
-The restart child waits up to 30 seconds for the parent before touching recovery state; there is
-no ready-handshake, so a child that cannot start must be reopened manually.
-
-`FOGU_UPDATER=manual cargo test -p fogu --test updater_e2e -- --ignored` updates a test build from a
-local server, with its own signing key, and checks that every bad release leaves it untouched. Its
-server and key overrides, and the headless install flag, exist only in debug builds. Public rollout
-starts in manual mode; automatic prompts require a successful public update cycle for the
-individual artifact first.
+- **Where:** Linux (binary and AppImage) updates itself; on macOS and Windows the page links to
+  the download for now.
+- **Safe:** every update is checked against Fogu's Ed25519 signature and its SHA-256 sums before
+  anything is replaced. If it fails, your current Fogu stays as it is.
+- **Turn it off:** set `FOGU_DISABLE_UPDATER=1`, or put a `.fogu-managed` file next to the
+  executable (package managers should do this). Builds from source have no updater.
+- **Needs** `curl`.
