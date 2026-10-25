@@ -116,12 +116,21 @@ Needs glibc 2.28 or newer (Debian 10, Ubuntu 20.04, RHEL 8, Fedora, Arch Linux).
 
 `curl`, which Fogu also uses for its updates, comes with macOS.
 
+Apple Silicon (M1 and later):
+
 ```bash
 curl -fsSLo Fogu.zip https://github.com/Revdep/Fogu/releases/latest/download/Fogu-macos-aarch64.zip
-mkdir -p ~/Applications && ditto -x -k Fogu.zip ~/Applications && rm Fogu.zip
+mkdir -p ~/Applications && tar -xf Fogu.zip -C ~/Applications && rm Fogu.zip
 ```
 
-On Intel Macs use `macos-x86_64` instead of `macos-aarch64`. Fogu then shows up in Applications.
+Intel:
+
+```bash
+curl -fsSLo Fogu.zip https://github.com/Revdep/Fogu/releases/latest/download/Fogu-macos-x86_64.zip
+mkdir -p ~/Applications && tar -xf Fogu.zip -C ~/Applications && rm Fogu.zip
+```
+
+Fogu then shows up in Applications.
 To start it as `fogu` from a terminal too (a wrapper, not a symlink, so macOS treats it as the app):
 
 ```bash
@@ -129,9 +138,19 @@ mkdir -p ~/.local/bin && printf '#!/bin/sh\nexec ~/Applications/Fogu.app/Content
 chmod 755 ~/.local/bin/fogu
 ```
 
-Downloaded with a browser instead of `curl`? Fogu is not notarized by Apple, so unblock it first:
+Downloaded with a browser instead of `curl`? Double-clicking the zip fails (Archive Utility
+rejects the update signature at its start), so extract it in Terminal, then unblock Fogu, which is
+not notarized by Apple. Apple Silicon:
 
 ```bash
+mkdir -p ~/Applications && tar -xf ~/Downloads/Fogu-macos-aarch64.zip -C ~/Applications
+xattr -dr com.apple.quarantine ~/Applications/Fogu.app
+```
+
+Intel:
+
+```bash
+mkdir -p ~/Applications && tar -xf ~/Downloads/Fogu-macos-x86_64.zip -C ~/Applications
 xattr -dr com.apple.quarantine ~/Applications/Fogu.app
 ```
 
