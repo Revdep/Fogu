@@ -160,7 +160,7 @@ xattr -dr com.apple.quarantine ~/Applications/Fogu.app
 - **Option key:** Option + a letter is Meta (`Option+f` = word forward); Option + other keys types
   the character (`@`, `#`, `[`, `~`). If your layout puts characters on Option + a letter
   (German `@` = Option+L), set `alt_is_meta = false` under `[terminal]`.
-- **Cmd key:** `Cmd` + a key that is not a Fogu shortcut does nothing, as in Terminal.app.
+- **Cmd key:** `Cmd` + a letter that is not a Fogu shortcut does nothing, as in Terminal.app.
 - **Locale:** shells started from Finder or the Dock get `LANG` from the system language.
 - **Passwords** are stored in the login Keychain (service `fogu`). After an update macOS may ask
   once to allow access.
@@ -195,8 +195,8 @@ To remove it, delete that folder.
 - **Passwords** are stored in the Windows Credential Manager.
 - **SSH agent:** Fogu uses the Windows OpenSSH agent. Start it once in an admin PowerShell with
   `Set-Service ssh-agent -StartupType Automatic; Start-Service ssh-agent`.
-- **Closing a tab** ends everything started in it, except programs that detach themselves
-  (`start`).
+- **Closing a tab** ends the shell and the programs in its console; detached programs (`start`,
+  windowed apps) keep running.
 - **Alpha limits:** a new tab or split opens in the current folder only when the shell reports it
   (OSC 7), and the "command finished" notification is not available yet.
 
@@ -252,7 +252,8 @@ No Homebrew? Use [rustup.rs](https://rustup.rs) instead.
 - Terminal emulation by [`alacritty_terminal`](https://github.com/alacritty/alacritty): fast, correct, battle-tested
 - Tabs with rename, colour and backgrounds (colour or image); split panes, resizable with the mouse
 - Drag and drop for tabs, panes and profiles; maximize, equalize and resize from the keyboard
-- Scrollback, mouse selection, copy to PRIMARY and CLIPBOARD, safe multi-line paste
+- Scrollback with search, mouse selection, copy to PRIMARY (Linux) and the clipboard, safe
+  multi-line paste
 - Mouse reporting for TUI apps, with Shift to override
 - Clickable links: OSC 8 hyperlinks plus detected URLs and paths, behind a scheme allow-list
 - Context menus everywhere, configurable right-click behaviour
@@ -274,20 +275,22 @@ No Homebrew? Use [rustup.rs](https://rustup.rs) instead.
 
 - Sidebar with groups, search and quick connect (`user@host:port`); right-click a profile →
   "Use for new tabs" to open it in every new tab
-- Reads your `~/.ssh/config` live (Host, HostName, User, Port, IdentityFile, ProxyJump,
-  ProxyCommand, HostKeyAlias…) — no import step, nothing duplicated
+- Reads your `~/.ssh/config` (Host, HostName, User, Port, IdentityFile, ProxyJump,
+  ProxyCommand, HostKeyAlias…), again whenever it changes — no import step, nothing duplicated
 - Profile page that edits `config.toml` in place, keeping your comments and writing only the
   values you change: groups, icon, tab colour, background, authentication, network, scripts
 - Password, public key, ssh-agent and keyboard-interactive authentication
-- Strict `known_hosts` checking: a changed host key is never accepted silently
+- `known_hosts` checking: an unknown host asks first, a changed host key is never accepted
+  silently
 - Jump hosts, proxy commands, SOCKS5 and HTTP proxies — a proxied profile never falls back to a
   direct connection
 - Port forwarding: local, remote and dynamic (SOCKS5), managed live from a dialog
 - Agent and X11 forwarding (off by default, clearly flagged when on)
-- Connection reuse: tabs, splits and SFTP for the same host share one SSH connection
+- Connection reuse: tabs, splits and SFTP of the same profile share one SSH connection
 - Passwords and key passphrases stored in the system keyring (Secret Service, Keychain,
   Credential Manager), never on disk
-- Login scripts, starting directory, remembered directory, automatic reconnect with backoff
+- Login scripts, starting directory, optional remembered directory, optional automatic
+  reconnect
 
 </details>
 
@@ -301,9 +304,9 @@ No Homebrew? Use [rustup.rs](https://rustup.rs) instead.
   → *Enable drag & drop on Wayland* and restart; Fogu then opens on XWayland, so on HiDPI screens
   it may look small or blurry, KDE's window blur is off and input methods (IBus, fcitx5) need
   `XMODIFIERS` (its shells and the apps it opens stay on Wayland)
-- Transfers with progress, cancel and resume
-- Hardened against hostile servers: sanitised names, disk-fill protection, downloaded files never
-  executable, nothing is ever launched from a remote listing
+- Transfers with progress and cancel; an existing target can be overwritten or resumed
+- Hardened against hostile servers: dangerous names refused, disk-fill protection, downloads not
+  executable by default, executables from the server are never opened
 
 </details>
 
