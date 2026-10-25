@@ -193,6 +193,7 @@ fn start_private() -> Option<PathBuf> {
     } else {
         &["tail", &tail_pid, "-f", "/dev/null"]
     };
+    // Inherits Fogu's environment (no `WAYLAND_DISPLAY` on XWayland): only a GUI askpass cares.
     let spawned = std::process::Command::new("ssh-agent")
         .arg("-a")
         .arg(&socket)

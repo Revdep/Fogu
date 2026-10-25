@@ -1121,6 +1121,11 @@ impl App {
         };
         self.save_on_exit();
         let mut command = Command::new(target.restart);
+        // Back on Wayland if Fogu runs on XWayland: the new Fogu decides again from its settings.
+        fogu_core::platform::give_back_wayland(
+            &mut command,
+            fogu_core::platform::kept_wayland_display().as_deref(),
+        );
         command
             .arg("--after-update-of")
             .arg(std::process::id().to_string())
