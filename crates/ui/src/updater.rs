@@ -1126,6 +1126,8 @@ impl App {
             &mut command,
             fogu_core::platform::kept_wayland_display().as_deref(),
         );
+        // The new AppImage's AppRun decides again which libraries it needs.
+        fogu_core::platform::drop_appimage_libs(&mut command, fogu_core::platform::in_appimage());
         command
             .arg("--after-update-of")
             .arg(std::process::id().to_string())

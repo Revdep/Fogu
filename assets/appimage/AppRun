@@ -1,0 +1,20 @@
+#!/bin/sh
+# AppImage entry point. winit opens the X11/xkb client libraries at run time; a bare system (the
+# AppImage catalog's test machine, minimal installs) lacks some of them, so usr/lib carries a
+# set built on glibc 2.28. They are used all together, and only when the host misses one of
+# them: a desktop keeps its own, newer libraries. Fogu removes LD_LIBRARY_PATH from the shells and
+# desktop apps it starts (fogu_core::platform::APPIMAGE_LIB_VARS).
+here=$(dirname "$(readlink -f "$0")")
+cache=$(PATH="$PATH:/sbin:/usr/sbin" ldconfig -p 2>/dev/null)
+for lib in "$here"/usr/lib/*.so.*; do
+    case $cache in
+        # `ldconfig -p` lines: "<tab>libXi.so.6 (libc6,x86-64) => /usr/lib/…" (32-bit: no)
+        *[[:space:]]"${lib##*/} (libc6,x86-64)"*) ;;
+        *)
+            LD_LIBRARY_PATH="$here/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            export LD_LIBRARY_PATH
+            break
+            ;;
+    esac
+done
+exec "$here/usr/bin/fogu" "$@"

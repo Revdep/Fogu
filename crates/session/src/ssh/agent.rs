@@ -193,8 +193,11 @@ fn start_private() -> Option<PathBuf> {
     } else {
         &["tail", &tail_pid, "-f", "/dev/null"]
     };
-    // Inherits Fogu's environment (no `WAYLAND_DISPLAY` on XWayland): only a GUI askpass cares.
-    let spawned = std::process::Command::new("ssh-agent")
+    // Inherits Fogu's environment (no `WAYLAND_DISPLAY` on XWayland): only a GUI askpass cares;
+    // the AppImage's libraries are kept from it.
+    let mut agent = std::process::Command::new("ssh-agent");
+    fogu_core::platform::drop_appimage_libs(&mut agent, fogu_core::platform::in_appimage());
+    let spawned = agent
         .arg("-a")
         .arg(&socket)
         .args(keep_alive)
