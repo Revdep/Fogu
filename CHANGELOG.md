@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.8 (2026-10-30)
+
+<!-- fogu-update: {"schema":1,"from":">=0.1.6, <0.2.0"} -->
+
+### Fixed
+- The AppImage starts on a bare system: it carries the X11 keyboard and cursor libraries
+  (libxkbcommon-x11, libXcursor and a few more) that minimal installs lack, and uses them only
+  then; a desktop keeps its own. The programs Fogu opens don't inherit them. Found by the
+  [AppImage catalog](https://appimage.github.io)'s test; a release is now checked the same way
+  before it is published.
+- The tab close button `×` shows again on the tab that slides under the pointer after you close
+  the one you were on; closing a tab to the left of the pointer no longer moves the `×` to the
+  wrong tab.
+
+### Security
+- Updated crypto-bigint to 0.7.10: 0.7.6 was withdrawn from crates.io.
+
 ## 0.1.7 (2026-10-25)
 
 <!-- fogu-update: {"schema":1,"from":">=0.1.6, <0.2.0"} -->

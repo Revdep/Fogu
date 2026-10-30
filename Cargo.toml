@@ -11,7 +11,7 @@ members = [
 [workspace.package]
 edition = "2024"
 license = "MIT"
-version = "0.1.7"
+version = "0.1.8"
 
 [workspace.dependencies]
 # why: the GUI toolkit, pinned exactly (it breaks between minors). `advanced` for the terminal
