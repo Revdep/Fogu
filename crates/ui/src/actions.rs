@@ -486,7 +486,9 @@ impl App {
         if self.renaming.as_ref().is_some_and(|r| r.tab == id) {
             self.renaming = None;
         }
-        if self.hovered_tab == Some(id) {
+        // The next tab slides into the hovered slot and keeps its hover; a slot past the end
+        // is gone, and a header opened there later starts unhovered.
+        if self.hovered_tab.is_some_and(|slot| slot >= self.tabs.len()) {
             self.hovered_tab = None;
         }
         if self.tabs.is_empty() {
@@ -564,9 +566,9 @@ impl App {
     pub(crate) fn on_tab_ui(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::CloseTab(id) => return self.request_close(CloseTarget::Tab(id)),
-            Message::HoverTab(id) => self.hovered_tab = id,
-            Message::LeaveTab(id) => {
-                if self.hovered_tab == Some(id) {
+            Message::HoverTab(slot) => self.hovered_tab = Some(slot),
+            Message::LeaveTab(slot) => {
+                if self.hovered_tab == Some(slot) {
                     self.hovered_tab = None;
                 }
             }
