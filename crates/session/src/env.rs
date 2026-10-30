@@ -14,10 +14,8 @@ const REMOVED: &[&str] = &[
     "RUST_BACKTRACE",
 ];
 
-/// Library overrides set by the `AppImage` runtime; removed only when running as an `AppImage`.
-const APPIMAGE_LIB_VARS: &[&str] = &["LD_LIBRARY_PATH", "LD_PRELOAD"];
-
-/// Builds the child environment: `parent` minus [`REMOVED`] (plus `LD_*` under an `AppImage`),
+/// Builds the child environment: `parent` minus [`REMOVED`] (plus
+/// [`fogu_core::platform::APPIMAGE_LIB_VARS`] under an `AppImage`),
 /// terminal identification variables, then `profile_env` with `${VAR}` expanded against that
 /// result (unknown variables expand to nothing).
 pub fn build_env<I>(
@@ -29,7 +27,7 @@ where
 {
     let mut env: BTreeMap<OsString, OsString> = parent.into_iter().collect();
     if env.contains_key(OsStr::new("APPIMAGE")) {
-        for key in APPIMAGE_LIB_VARS {
+        for key in fogu_core::platform::APPIMAGE_LIB_VARS {
             env.remove(OsStr::new(key));
         }
     }

@@ -352,8 +352,10 @@ fn launch(
     kept: Option<&std::ffi::OsStr>,
 ) -> std::io::Result<()> {
     let mut last_err = None;
+    let appimage = fogu_core::platform::in_appimage();
     for mut cmd in commands {
         fogu_core::platform::give_back_wayland(&mut cmd, kept);
+        fogu_core::platform::drop_appimage_libs(&mut cmd, appimage);
         let status = cmd
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
@@ -380,6 +382,9 @@ pub(crate) fn picker_available() -> bool {
     {
         true
     }
+    // shortcut: rfd starts zenity itself (no portal), so under an AppImage whose AppRun turned on
+    // the bundled X11/xkb libraries zenity gets them too; harmless while they keep their ABI
+    // (GTK 3 needs nothing newer), drop zenity under an AppImage if one ever breaks it.
     #[cfg(unix)]
     {
         cfg!(target_os = "macos") || in_path("zenity") || portal_installed()

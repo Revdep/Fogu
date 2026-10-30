@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Builds a portable Linux x86_64 release and packs it for testers:
 #   dist/Fogu-linux-x86_64.tar.gz  (binary, icons, .desktop entry, install.sh)
+#   target/compat/appimage-lib     (libraries for the AppImage, scripts/appimage-libs.sh)
 # The build runs in the manylinux_2_28 image (AlmaLinux 8, glibc 2.28) through Docker, so the
 # binary starts on Debian 10+, Ubuntu 20.04+, RHEL/Alma/Rocky 8+, Fedora, Arch and newer; the
 # release built on this machine needs the host's much newer glibc. Needs: docker, cargo-about
@@ -27,10 +28,13 @@ RUN curl -sSfo /tmp/rustup-init \
     && rm /tmp/rustup-init
 EOF
 
-# Root in the container: the output is handed back to the caller's uid at the end.
+# Root in the container: the output is handed back to the caller's uid at the end (and target/
+# made here first, or docker creates it as root).
+mkdir -p target/compat
 docker run --rm --network host -v "$PWD":/src -v fogu-cargo:/cargo-home -w /src \
     -e CARGO_HOME=/cargo-home -e CARGO_TARGET_DIR=/src/target/compat -e FOGU_UPDATER "$image" \
-    sh -c "cargo build --release --locked -p fogu && chown -R $(id -u):$(id -g) target/compat"
+    sh -c "cargo build --release --locked -p fogu && scripts/appimage-libs.sh target/compat/appimage-lib \
+        && chown -R $(id -u):$(id -g) target/compat"
 
 bin=target/compat/release/fogu
 needed=$(objdump -T "$bin" | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1)
