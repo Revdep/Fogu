@@ -556,7 +556,22 @@ impl App {
                     PasteSource::Clipboard => clipboard::read(),
                     PasteSource::Primary => crate::lifecycle::read_selection(),
                 }
-                .map(move |text| Message::Pane(id, Box::new(Message::PasteReady(text))));
+                .map(move |text| {
+                    let msg = match text {
+                        // No text (an image, say): Ctrl+V lets Claude Code, Codex and the like
+                        // read the clipboard themselves.
+                        None if source == PasteSource::Clipboard => Message::Key(input::KeyInput {
+                            key: input::KeyCode::Char('v'),
+                            text: None,
+                            mods: input::Mods {
+                                ctrl: true,
+                                ..input::Mods::default()
+                            },
+                        }),
+                        text => Message::PasteReady(text),
+                    };
+                    Message::Pane(id, Box::new(msg))
+                });
             }
             Message::PasteReady(text) => self.on_paste_ready(id, text),
             Message::ConfirmPaste => {
