@@ -1,0 +1,14 @@
+# "Tokyo Night Moon". Third-party palette; see THIRD_PARTY_LICENSES.
+name = "Tokyo Night Moon"
+fg = "#c8d3f5"
+bg = "#222436"
+cursor = "#c8d3f5"
+cursor_text = "#222436"
+selection_bg = "#444a73"
+selection_fg = "#c8d3f5"
+ansi = [
+    "#1b1d2b", "#ff757f", "#c3e88d", "#ffc777",
+    "#82aaff", "#c099ff", "#86e1fc", "#828bb8",
+    "#444a73", "#ff8d94", "#c7fb6d", "#ffd8ab",
+    "#9ab8ff", "#caabff", "#b2ebff", "#c8d3f5",
+]

@@ -98,31 +98,47 @@ pub struct ColorScheme {
     pub ansi: [RgbColor; 16],
 }
 
-/// The 6 built-in schemes, parsed once from the embedded TOML assets.
-static BUILTINS: LazyLock<[ColorScheme; 6]> = LazyLock::new(load_builtins);
+/// The 16 built-in schemes, parsed once from the embedded TOML assets.
+static BUILTINS: LazyLock<[ColorScheme; 16]> = LazyLock::new(load_builtins);
 
 #[expect(
     clippy::expect_used,
     reason = "the asset strings are compile-time-embedded and fixed; a typo in one is a build-\
-              time bug caught immediately by `six_builtins_with_distinct_names` and every other \
+              time bug caught immediately by `sixteen_builtins_with_distinct_names` and every other \
               test in this module, never a runtime failure mode for users"
 )]
-fn load_builtins() -> [ColorScheme; 6] {
-    const SOURCES: [&str; 6] = [
-        include_str!("../../../assets/schemes/fogu-dark.toml"),
+fn load_builtins() -> [ColorScheme; 16] {
+    const SOURCES: [&str; 16] = [
+        include_str!("../../../assets/schemes/nocturne.toml"),
         include_str!("../../../assets/schemes/fogu-light.toml"),
         include_str!("../../../assets/schemes/solarized-dark.toml"),
         include_str!("../../../assets/schemes/dracula.toml"),
-        include_str!("../../../assets/schemes/nocturne.toml"),
+        include_str!("../../../assets/schemes/catppuccin-latte.toml"),
+        include_str!("../../../assets/schemes/catppuccin-frappe.toml"),
+        include_str!("../../../assets/schemes/catppuccin-macchiato.toml"),
         include_str!("../../../assets/schemes/catppuccin-mocha.toml"),
+        include_str!("../../../assets/schemes/gruvbox-dark.toml"),
+        include_str!("../../../assets/schemes/gruvbox-light.toml"),
+        include_str!("../../../assets/schemes/nord.toml"),
+        include_str!("../../../assets/schemes/tokyo-night.toml"),
+        include_str!("../../../assets/schemes/tokyo-night-storm.toml"),
+        include_str!("../../../assets/schemes/tokyo-night-moon.toml"),
+        include_str!("../../../assets/schemes/tokyo-night-day.toml"),
+        include_str!("../../../assets/schemes/one-dark.toml"),
     ];
     SOURCES.map(|src| toml::from_str(src).expect("builtin colour scheme asset"))
 }
 
 impl ColorScheme {
-    /// Looks up a built-in scheme by its exact (case-sensitive) `name`.
+    /// Looks up a built-in scheme by its exact (case-sensitive) `name`. "Fogu Dark", the
+    /// default until 0.1.6, is Nocturne now.
     #[must_use]
     pub fn by_name(name: &str) -> Option<Self> {
+        let name = if name == "Fogu Dark" {
+            "Nocturne"
+        } else {
+            name
+        };
         BUILTINS.iter().find(|s| s.name == name).cloned()
     }
 
@@ -134,22 +150,22 @@ impl ColorScheme {
 }
 
 impl Default for ColorScheme {
-    /// "Fogu Dark", the same values as `assets/schemes/fogu-dark.toml` (kept as a
+    /// "Nocturne", the same values as `assets/schemes/nocturne.toml` (kept as a
     /// hardcoded fallback — unlike [`by_name`](Self::by_name) this can never fail to parse — and
     /// checked against the asset by the `default_matches_builtin_asset` test below).
     fn default() -> Self {
         const ANSI: [u32; 16] = [
-            0x00_0000, 0xff_615a, 0xb1_e969, 0xeb_d99c, 0x5d_a9f6, 0xe8_6aff, 0x82_fff7, 0xde_dacf,
-            0x76_7676, 0xf5_8c80, 0xdd_f88f, 0xee_e5b2, 0xa5_c7ff, 0xdd_aaff, 0xb7_fff9, 0xff_ffff,
+            0x29_2b31, 0xef_6f7d, 0x9b_d67f, 0xe8_c77e, 0x96_8ae0, 0xd5_8cf0, 0x6f_d0d8, 0xd9_dbe8,
+            0x75_798c, 0xf7_929c, 0xb7_e89d, 0xf2_d9a0, 0xb5_abfc, 0xe6_b0f7, 0x95_e3e8, 0xf3_f5fe,
         ];
         Self {
-            name: "Fogu Dark".to_owned(),
-            fg: RgbColor::from_hex(0xca_caca),
-            bg: RgbColor::from_hex(0x17_1717),
-            cursor: RgbColor::from_hex(0xbb_bbbb),
-            cursor_text: RgbColor::from_hex(0x17_1717),
-            selection_bg: RgbColor::from_hex(0xca_caca),
-            selection_fg: RgbColor::from_hex(0x17_1717),
+            name: "Nocturne".to_owned(),
+            fg: RgbColor::from_hex(0xcf_d3e5),
+            bg: RgbColor::from_hex(0x16_1826),
+            cursor: RgbColor::from_hex(0xb5_abfc),
+            cursor_text: RgbColor::from_hex(0x16_1826),
+            selection_bg: RgbColor::from_hex(0x42_3a6a),
+            selection_fg: RgbColor::from_hex(0xf3_f5fe),
             ansi: ANSI.map(RgbColor::from_hex),
         }
     }
@@ -192,18 +208,23 @@ mod tests {
     fn default_matches_builtin_asset() {
         assert_eq!(
             ColorScheme::default(),
-            ColorScheme::by_name("Fogu Dark").unwrap()
+            ColorScheme::by_name("Nocturne").unwrap()
+        );
+        // A config from 0.1.6 or older still names the old default.
+        assert_eq!(
+            ColorScheme::by_name("Fogu Dark"),
+            ColorScheme::by_name("Nocturne")
         );
     }
 
     #[test]
-    fn six_builtins_with_distinct_names() {
+    fn sixteen_builtins_with_distinct_names() {
         let builtins = ColorScheme::builtins();
-        assert_eq!(builtins.len(), 6);
+        assert_eq!(builtins.len(), 16);
         let names: Vec<&str> = builtins.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(
             names.iter().collect::<std::collections::HashSet<_>>().len(),
-            6
+            16
         );
         assert!(ColorScheme::by_name("Dracula").is_some());
         assert!(ColorScheme::by_name("Nocturne").is_some());

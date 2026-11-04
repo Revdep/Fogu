@@ -1,6 +1,6 @@
 //! Built-in local profiles:
-//! "Default shell" plus one profile per installed shell listed in `/etc/shells`, generated at
-//! runtime and never stored. Hidden with `appearance.show_builtin_profiles = false`.
+//! the default shell (named after the computer) plus one profile per installed shell listed in
+//! `/etc/shells`, generated at runtime and never stored. Hidden with `appearance.show_builtin_profiles = false`.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -75,17 +75,18 @@ pub fn builtin_profiles(shells: &Path) -> Vec<Profile> {
 }
 
 /// The built-in local profiles for this platform: `/etc/shells` on Unix, the usual Windows
-/// shells discovered from the system on Windows.
+/// shells discovered from the system on Windows. The default shell is named after the computer
+/// ("Default shell" when it has no name).
 #[must_use]
 pub fn builtin_shell_profiles() -> Vec<Profile> {
     #[cfg(unix)]
-    {
-        builtin_profiles(Path::new(ETC_SHELLS))
-    }
+    let mut out = builtin_profiles(Path::new(ETC_SHELLS));
     #[cfg(windows)]
-    {
-        windows_profiles()
+    let mut out = windows_profiles();
+    if let (Some(first), Some(name)) = (out.first_mut(), crate::platform::host_name()) {
+        first.name = name;
     }
+    out
 }
 
 #[cfg(windows)]

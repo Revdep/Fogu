@@ -7,7 +7,8 @@
 # Set FOGU_SKIP_BUILD=1 to reuse an existing target/release/fogu (automatic in a release archive,
 # which has no Cargo.toml).
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")"
+[[ "${PWD##*/}" != scripts ]] || cd ..
 
 bin_dir="$HOME/.local/bin"
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -25,30 +26,8 @@ if [[ "$(uname)" == Darwin ]]; then
     fi
     [[ "${FOGU_SKIP_BUILD:-}" == 1 || ! -f Cargo.toml ]] || cargo build --release --locked -p fogu
     rm -rf "$app"
-    mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$bin_dir"
-    install -m 755 target/release/fogu "$app/Contents/MacOS/fogu"
-    iconset="$(mktemp -d)/fogu.iconset"
-    mkdir "$iconset"
-    for s in 16 32 128 256 512; do
-        sips -z "$s" "$s" assets/fogu.png --out "$iconset/icon_${s}x${s}.png" >/dev/null
-        sips -z $((s * 2)) $((s * 2)) assets/fogu.png --out "$iconset/icon_${s}x${s}@2x.png" >/dev/null
-    done
-    iconutil -c icns "$iconset" -o "$app/Contents/Resources/fogu.icns"
-    rm -rf "$(dirname "$iconset")"
-    cat > "$app/Contents/Info.plist" <<'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleName</key><string>Fogu</string>
-    <key>CFBundleIdentifier</key><string>io.github.revdep.fogu</string>
-    <key>CFBundleExecutable</key><string>fogu</string>
-    <key>CFBundleIconFile</key><string>fogu</string>
-    <key>CFBundlePackageType</key><string>APPL</string>
-    <key>NSHighResolutionCapable</key><true/>
-</dict>
-</plist>
-PLIST
+    mkdir -p "$bin_dir"
+    scripts/package-macos.sh target/release/fogu "$app"
     # A wrapper, not a symlink: the full path makes macOS treat the process as the bundle.
     printf '#!/bin/sh\nexec "%s/Contents/MacOS/fogu" "$@"\n' "$app" > "$bin_dir/fogu"
     chmod 755 "$bin_dir/fogu"
@@ -74,7 +53,9 @@ if [[ "${1:-}" == "--uninstall" ]]; then
 fi
 
 [[ "${FOGU_SKIP_BUILD:-}" == 1 || ! -f Cargo.toml ]] || cargo build --release --locked -p fogu
-install -Dm755 target/release/fogu "$bin_dir/fogu"
+bin=target/release/fogu
+[[ ! -f fogu ]] || bin=fogu
+install -Dm755 "$bin" "$bin_dir/fogu"
 for s in "${sizes[@]}"; do
     install -Dm644 "assets/icons/fogu-$s.png" "$data_dir/icons/hicolor/${s}x${s}/apps/fogu.png"
 done

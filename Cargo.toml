@@ -11,7 +11,7 @@ members = [
 [workspace.package]
 edition = "2024"
 license = "MIT"
-version = "0.1.6"
+version = "0.1.7"
 
 [workspace.dependencies]
 # why: the GUI toolkit, pinned exactly (it breaks between minors). `advanced` for the terminal
@@ -87,6 +87,17 @@ open = "5.4.4"
 # why: tab background images with size limits; the same 0.25 iced uses, PNG/JPEG/WebP only
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
 
+
+# why: the updater's Ed25519 archive signatures (the format the `zipsign` CLI writes in release CI)
+zipsign-api = { version = "0.2.2", default-features = false }
+# why: release tags and the release's "upgrade from" ranges
+semver = { version = "1.0.28", features = ["serde"] }
+# why: updater archives (.tar.gz on Linux, .zip on macOS/Windows); flate2 already comes with russh
+flate2 = "1.1.10"
+tar = { version = "0.4.46", default-features = false }
+zip = { version = "9.1.0", default-features = false, features = ["deflate"] }
+# why: Windows can't rename over a running exe; this moves it aside first
+self-replace = "1.5.0"
 
 [workspace.lints.rust]
 # `deny`, not `forbid`: `fogu_core::winsec` (Windows only) is the one module allowed to opt out.

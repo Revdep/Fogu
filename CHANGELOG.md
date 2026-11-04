@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.1.7 (2026-10-25)
+
+<!-- fogu-update: {"schema":1,"from":">=0.1.6, <0.2.0"} -->
+
+### Added
+- Settings → Updates: Fogu looks for a new release, shows what changed and installs it only when
+  you choose, checking its signature first; then it restarts with your tabs. A new version is
+  announced at most twice. Linux for now; macOS and Windows link to the download. Needs `curl`.
+- Profile menu → "Use for new tabs": new tabs open that profile (stored or built-in); the sidebar
+  marks it "default". The built-in "Default shell" is now named after the computer.
+- Settings → config.toml: the whole file as text, for the keys the pages don't show. Save writes it
+  only when it loads (the error otherwise) and applies it at once; Revert reads it again.
+- Colour schemes: Catppuccin Latte, Frappé and Macchiato next to Mocha; Gruvbox Dark and Light;
+  Nord; Tokyo Night, Storm, Moon and Day; One Dark.
+- Settings → SFTP → *Enable drag & drop on Wayland* (`[sftp] wayland_drag_and_drop`, off by
+  default): Fogu opens on XWayland, where files can be dropped onto the SFTP panel; local shells
+  and the apps it opens keep `WAYLAND_DISPLAY` (`wl-copy`, Wayland apps). Read at start-up. Under
+  XWayland, on HiDPI screens it may look small or blurry, KDE's window blur is off and input
+  methods need `XMODIFIERS`. By Nicola ([@Oginexe](https://github.com/Oginexe)) in
+  [#11](https://github.com/Revdep/Fogu/pull/11). Thank you!
+
+### Changed
+- The Linux release runs on glibc 2.28 or newer (was 2.35): Debian 10, Ubuntu 20.04, RHEL 8.
+- Nocturne is the default colour scheme, with new terminal colours, and Fogu Light is a new light
+  palette; both are Fogu's own. Fogu Dark is gone: a config that names it gets Nocturne.
+
+### Fixed
+- macOS install: the README's commands use `tar`, since `ditto` and Archive Utility can't open the
+  release zip (its update signature comes first), with one block for Apple Silicon and one for
+  Intel. README menu and install-from-source restructured by Camilla
+  ([@camimurg](https://github.com/camimurg)) in [#15](https://github.com/Revdep/Fogu/pull/15).
+  Thank you!
+
+### Security
+- Updated crypto-bigint to 0.7.6 to fix timing variability in integer operations used by SSH cryptography.
+
 ## 0.1.6 (2026-10-23)
 
 ### Added

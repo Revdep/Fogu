@@ -560,6 +560,8 @@ impl App {
     /// The window is closing: save everything now.
     pub(crate) fn save_on_exit(&mut self) {
         if let Some(mut recovery) = self.recovery.take() {
+            // An older queued snapshot must not overwrite the final synchronous save.
+            recovery.io.generation.fetch_add(1, Ordering::AcqRel);
             recovery.last_session.clear();
             self.save_recovery(&mut recovery, true, true);
             self.recovery = Some(recovery);

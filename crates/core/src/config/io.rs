@@ -141,6 +141,15 @@ pub fn set_profile_background(
     write_atomic(dir, doc.to_string().as_bytes())
 }
 
+/// Replaces `dir/config.toml` with `text` as typed (Settings › config.toml), only when it loads:
+/// a file that would fall back to the defaults is refused, nothing written. Same atomic write,
+/// `.bak` and symlink handling as every other edit.
+pub fn write_text(dir: &Path, text: &str) -> Result<Config, ConfigError> {
+    let config = parse(text, &dir.join(FILE_NAME))?;
+    write_atomic(dir, text.as_bytes())?;
+    Ok(config)
+}
+
 /// `background` as the inline table the docs show: `{ color = "#rrggbb" }` or
 /// `{ image = { path = "…", opacity = 0.6, fit = "contain" } }` (`blur` only when on).
 fn background_value(background: &Background) -> toml_edit::Value {
@@ -198,6 +207,27 @@ pub(super) fn write_atomic(dir: &Path, contents: &[u8]) -> Result<(), ConfigErro
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn write_text_refuses_a_file_that_would_not_load() {
+        let dir = std::env::temp_dir().join(format!("fogu-write-text-{}", std::process::id()));
+        let _stale = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(FILE_NAME);
+        std::fs::write(&path, "# mine\n").unwrap();
+        for bad in ["[appearance\n", "[appearance]\nfont_size = \"big\"\n"] {
+            assert!(write_text(&dir, bad).is_err(), "{bad}");
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), "# mine\n");
+        }
+        let good = "# typed\n[appearance]\nfont_size = 14.0\n";
+        assert!((write_text(&dir, good).unwrap().appearance.font_size - 14.0).abs() < f32::EPSILON);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), good);
+        assert_eq!(
+            std::fs::read_to_string(dir.join("config.toml.bak")).unwrap(),
+            "# mine\n"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn config_dir_honours_the_override() {

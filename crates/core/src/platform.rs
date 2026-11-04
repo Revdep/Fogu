@@ -7,11 +7,46 @@
 //! On Linux these are the XDG directories (and still `$XDG_*`-aware); on Windows they are the
 //! roaming (`%APPDATA%`) and local (`%LOCALAPPDATA%`) app-data directories.
 
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::path::{Component, Path, PathBuf, Prefix};
 
 /// The application's directory name under the platform's config/state root.
 pub const APP_DIR: &str = "fogu";
+
+/// Makes winit and most toolkits use Wayland: the compositor's display name.
+pub const WAYLAND_DISPLAY: &str = "WAYLAND_DISPLAY";
+/// Makes them use Wayland too: a connection inherited from the launcher (a file descriptor).
+pub const WAYLAND_SOCKET: &str = "WAYLAND_SOCKET";
+
+/// Where Fogu keeps the session's `WAYLAND_DISPLAY` after restarting itself on `XWayland` (file
+/// drops need X11): the programs it starts get it back, so they still reach the compositor.
+pub const KEPT_WAYLAND_DISPLAY: &str = "FOGU_WAYLAND_DISPLAY";
+
+/// Whether this process talks to a Wayland compositor: either variable set and not empty.
+#[must_use]
+pub fn on_wayland() -> bool {
+    [WAYLAND_DISPLAY, WAYLAND_SOCKET]
+        .iter()
+        .any(|key| std::env::var_os(key).is_some_and(|v| !v.is_empty()))
+}
+
+/// The Wayland display Fogu set aside when it restarted on `XWayland`, for the programs it starts
+/// (`None` when it did not).
+#[must_use]
+pub fn kept_wayland_display() -> Option<OsString> {
+    std::env::var_os(KEPT_WAYLAND_DISPLAY).filter(|v| !v.is_empty())
+}
+
+/// Gives a program Fogu starts the session's Wayland display back (`kept`, from
+/// [`kept_wayland_display`]), so it is not moved to `XWayland` with Fogu; a restarted Fogu then
+/// decides again from its settings.
+pub fn give_back_wayland(command: &mut std::process::Command, kept: Option<&OsStr>) {
+    if let Some(display) = kept {
+        command
+            .env(WAYLAND_DISPLAY, display)
+            .env_remove(KEPT_WAYLAND_DISPLAY);
+    }
+}
 
 /// The user's home directory.
 #[must_use]
@@ -49,6 +84,26 @@ pub fn state_dir() -> Option<PathBuf> {
     #[cfg(windows)]
     let base = dirs::data_local_dir();
     base.map(|base| base.join(APP_DIR))
+}
+
+/// The computer's name, without a domain (`P14S` for `P14S.lan`): the built-in default shell's
+/// name. `None` when the system reports none.
+#[must_use]
+pub fn host_name() -> Option<String> {
+    #[cfg(unix)]
+    let name = rustix::system::uname()
+        .nodename()
+        .to_string_lossy()
+        .into_owned();
+    #[cfg(windows)]
+    let name = std::env::var("COMPUTERNAME").ok()?;
+    short_host(&name)
+}
+
+/// `name` up to its first dot, trimmed; `None` when that leaves nothing.
+fn short_host(name: &str) -> Option<String> {
+    let short = name.split('.').next().unwrap_or_default().trim();
+    (!short.is_empty()).then(|| short.to_owned())
 }
 
 /// The user's download directory, used by SFTP double-click downloads.
@@ -134,6 +189,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn host_names_lose_their_domain() {
+        assert_eq!(short_host("P14S.lan").as_deref(), Some("P14S"));
+        assert_eq!(short_host("mac-mini.local").as_deref(), Some("mac-mini"));
+        assert_eq!(short_host("DESKTOP-1").as_deref(), Some("DESKTOP-1"));
+        assert_eq!(short_host(" "), None);
+        assert_eq!(short_host(".lan"), None);
+    }
+
+    #[test]
     fn app_directories_end_with_the_app_name() {
         assert!(config_dir().ends_with(APP_DIR));
         assert!(state_dir().is_none_or(|dir| dir.ends_with(APP_DIR)));
@@ -171,5 +235,25 @@ mod tests {
     fn known_hosts_starts_with_fogus_own_file() {
         let files = known_hosts_files();
         assert_eq!(files.first(), Some(&config_dir().join("known_hosts")));
+    }
+
+    #[test]
+    fn programs_get_the_wayland_display_back_and_not_the_kept_copy() {
+        let envs = |cmd: &std::process::Command| {
+            cmd.get_envs()
+                .map(|(k, v)| (k.to_owned(), v.map(OsStr::to_owned)))
+                .collect::<Vec<_>>()
+        };
+        let mut kept = std::process::Command::new("true");
+        give_back_wayland(&mut kept, Some(OsStr::new("wayland-1")));
+        let set = envs(&kept);
+        assert!(set.contains(&(WAYLAND_DISPLAY.into(), Some("wayland-1".into()))));
+        assert!(
+            set.contains(&(KEPT_WAYLAND_DISPLAY.into(), None)),
+            "removed for the child"
+        );
+        let mut untouched = std::process::Command::new("true");
+        give_back_wayland(&mut untouched, None);
+        assert_eq!(envs(&untouched), Vec::new(), "no kept display: nothing set");
     }
 }

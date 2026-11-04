@@ -45,6 +45,10 @@ jobs:
         env:
           FOGU_REQUIRE_SSHD: "1"
       - run: cargo test --doc --workspace --locked
+      # the updater updates a test build from a local server; it is compiled in only with the flag
+      - run: cargo test -p fogu --test updater_e2e --locked -- --ignored
+        env:
+          FOGU_UPDATER: manual
       - run: cargo deny check
   # the macOS build: an ungated Linux-only call breaks here, not on a user's Mac
   check-macos:

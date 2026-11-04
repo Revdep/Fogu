@@ -15,6 +15,15 @@
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-red">
 </p>
 
+- [What it is](#what-it-is)
+- [Install](#install)
+  - [Linux](#linux) · [macOS](#macos) · [Windows](#windows-alpha)
+  - [From source](#install-from-source): [Linux](#linux-from-source) · [macOS](#macos-from-source)
+  - [Uninstall](#uninstall)
+- [Features](#features)
+- [Contributing and license](#contributing-and-license)
+- [Optional updates](#optional-updates)
+
 ## What it is
 
 A terminal for people who live on remote servers. Click a host in the sidebar and you are in a
@@ -69,12 +78,29 @@ and starts in about a tenth of a second. *Fogu* means *fire* in Sardinian.
 </details>
 
 ## Install
+Prebuilt downloads come from the [Releases page](https://github.com/Revdep/Fogu/releases).
 
 ### Linux
 
+Fogu needs `curl` (for this download and for its own updates) and the X11/Wayland keyboard,
+cursor and input libraries. Desktop installs have them all; on a minimal system install them first:
+
+```bash
+# Debian, Ubuntu
+sudo apt install curl libx11-6 libx11-xcb1 libxcb1 libxcursor1 libxi6 libxkbcommon0 libxkbcommon-x11-0 libwayland-client0
+# Fedora, RHEL
+sudo dnf install curl libX11 libX11-xcb libxcb libXcursor libXi libxkbcommon libxkbcommon-x11 libwayland-client
+# Arch Linux
+sudo pacman -S --needed curl libx11 libxcb libxcursor libxi libxkbcommon libxkbcommon-x11 wayland
+```
+
+Without a working GPU driver, start it with `fogu --software-render`.
+
+Then:
+
 ```bash
 curl -fsSL https://github.com/Revdep/Fogu/releases/latest/download/Fogu-linux-x86_64.tar.gz | tar xz
-cd Fogu-linux-x86_64 && ./scripts/install.sh
+cd Fogu-linux-x86_64 && ./install.sh
 ```
 
 Or the single-file AppImage:
@@ -84,21 +110,48 @@ curl -fsSLo Fogu.AppImage https://github.com/Revdep/Fogu/releases/latest/downloa
 chmod +x Fogu.AppImage && ./Fogu.AppImage
 ```
 
-Needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36, Arch Linux).
+Needs glibc 2.28 or newer (Debian 10, Ubuntu 20.04, RHEL 8, Fedora, Arch Linux).
 
 ### macOS
 
+`curl`, which Fogu also uses for its updates, comes with macOS.
+
+Apple Silicon (M1 and later):
+
 ```bash
-curl -fsSL https://github.com/Revdep/Fogu/releases/latest/download/Fogu-macos-aarch64.tar.gz | tar xz
-cd Fogu-macos-aarch64 && ./scripts/install.sh
+curl -fsSLo Fogu.zip https://github.com/Revdep/Fogu/releases/latest/download/Fogu-macos-aarch64.zip
+mkdir -p ~/Applications && tar -xf Fogu.zip -C ~/Applications && rm Fogu.zip
 ```
 
-On Intel Macs use `macos-x86_64` instead of `macos-aarch64`. Fogu then shows up in Applications.
-
-Downloaded with a browser instead of `curl`? Fogu is not notarized by Apple, so unblock it first:
+Intel:
 
 ```bash
-xattr -dr com.apple.quarantine Fogu-macos-*
+curl -fsSLo Fogu.zip https://github.com/Revdep/Fogu/releases/latest/download/Fogu-macos-x86_64.zip
+mkdir -p ~/Applications && tar -xf Fogu.zip -C ~/Applications && rm Fogu.zip
+```
+
+Fogu then shows up in Applications.
+To start it as `fogu` from a terminal too (a wrapper, not a symlink, so macOS treats it as the app):
+
+```bash
+mkdir -p ~/.local/bin && printf '#!/bin/sh\nexec ~/Applications/Fogu.app/Contents/MacOS/fogu "$@"\n' > ~/.local/bin/fogu
+chmod 755 ~/.local/bin/fogu
+```
+
+Downloaded with a browser instead of `curl`? Double-clicking the zip fails (Archive Utility
+rejects the update signature at its start), so extract it in Terminal, then unblock Fogu, which is
+not notarized by Apple. Apple Silicon:
+
+```bash
+mkdir -p ~/Applications && tar -xf ~/Downloads/Fogu-macos-aarch64.zip -C ~/Applications
+xattr -dr com.apple.quarantine ~/Applications/Fogu.app
+```
+
+Intel:
+
+```bash
+mkdir -p ~/Applications && tar -xf ~/Downloads/Fogu-macos-x86_64.zip -C ~/Applications
+xattr -dr com.apple.quarantine ~/Applications/Fogu.app
 ```
 
 <details>
@@ -107,7 +160,7 @@ xattr -dr com.apple.quarantine Fogu-macos-*
 - **Option key:** Option + a letter is Meta (`Option+f` = word forward); Option + other keys types
   the character (`@`, `#`, `[`, `~`). If your layout puts characters on Option + a letter
   (German `@` = Option+L), set `alt_is_meta = false` under `[terminal]`.
-- **Cmd key:** `Cmd` + a key that is not a Fogu shortcut does nothing, as in Terminal.app.
+- **Cmd key:** `Cmd` + a letter that is not a Fogu shortcut does nothing, as in Terminal.app.
 - **Locale:** shells started from Finder or the Dock get `LANG` from the system language.
 - **Passwords** are stored in the login Keychain (service `fogu`). After an update macOS may ask
   once to allow access.
@@ -115,9 +168,12 @@ xattr -dr com.apple.quarantine Fogu-macos-*
 
 </details>
 
+**Prefer to build from source? See [Install from source](#install-from-source).**
+
 ### Windows (alpha)
 
-Windows 10 or 11, x86_64. In PowerShell:
+Windows 10 (1803 or later) or 11, x86_64; `curl.exe`, which Fogu also uses for its updates, comes
+with them. In PowerShell:
 
 ```powershell
 curl.exe -fsSLo Fogu.zip https://github.com/Revdep/Fogu/releases/latest/download/Fogu-windows-x86_64.zip
@@ -139,46 +195,53 @@ To remove it, delete that folder.
 - **Passwords** are stored in the Windows Credential Manager.
 - **SSH agent:** Fogu uses the Windows OpenSSH agent. Start it once in an admin PowerShell with
   `Set-Service ssh-agent -StartupType Automatic; Start-Service ssh-agent`.
-- **Closing a tab** ends everything started in it, except programs that detach themselves
-  (`start`).
+- **Closing a tab** ends the shell and the programs in its console; detached programs (`start`,
+  windowed apps) keep running.
 - **Alpha limits:** a new tab or split opens in the current folder only when the shell reports it
   (OSC 7), and the "command finished" notification is not available yet.
 
 </details>
 
-<details>
-<summary><b>From source, and uninstall</b></summary>
+### Install from source
+
+Install the prerequisites for your system first ([Linux](#linux-from-source), [macOS](#macos-from-source)), then:
 
 ```bash
 git clone https://github.com/Revdep/Fogu.git
 cd Fogu && ./scripts/install.sh
 ```
 
+On Windows, see [Good to know on Windows](#windows-alpha).
+
+#### Linux (from source)
+
 Needs [rustup](https://rustup.rs) (it picks the right Rust version). Plus, on Debian/Ubuntu:
 
 ```bash
-sudo apt install build-essential pkg-config libudev-dev libxkbcommon-dev libwayland-dev
+sudo apt install build-essential pkg-config libudev-dev libxkbcommon-dev libwayland-dev curl
 ```
 
 on Arch Linux:
 
 ```bash
-sudo pacman -S --needed base-devel pkgconf systemd-libs libxkbcommon wayland
+sudo pacman -S --needed base-devel pkgconf systemd-libs libxkbcommon wayland curl
 ```
 
-and on macOS:
+#### macOS (from source)
 
 ```bash
-xcode-select --install
+xcode-select --install   # Apple's compiler and linker, needed to build Rust
+# skip the next two lines if `cargo --version` already works
+brew install rustup && rustup default stable
+echo 'export PATH="/opt/homebrew/opt/rustup/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 ```
 
-**Uninstall** (Linux and macOS):
+No Homebrew? Use [rustup.rs](https://rustup.rs) instead.
 
-```bash
-./scripts/install.sh --uninstall
-```
+### Uninstall
 
-</details>
+- **Built from source (Linux and macOS):** `./scripts/install.sh --uninstall`
+- **Prebuilt macOS:** delete `~/Applications/Fogu.app` and `~/.local/bin/fogu`
 
 ## Features
 
@@ -189,7 +252,8 @@ xcode-select --install
 - Terminal emulation by [`alacritty_terminal`](https://github.com/alacritty/alacritty): fast, correct, battle-tested
 - Tabs with rename, colour and backgrounds (colour or image); split panes, resizable with the mouse
 - Drag and drop for tabs, panes and profiles; maximize, equalize and resize from the keyboard
-- Scrollback, mouse selection, copy to PRIMARY and CLIPBOARD, safe multi-line paste
+- Scrollback with search, mouse selection, copy to PRIMARY (Linux) and the clipboard, safe
+  multi-line paste
 - Mouse reporting for TUI apps, with Shift to override
 - Clickable links: OSC 8 hyperlinks plus detected URLs and paths, behind a scheme allow-list
 - Context menus everywhere, configurable right-click behaviour
@@ -197,8 +261,11 @@ xcode-select --install
   window opened while Fogu runs starts clean on the start page and leaves the saved tabs alone
 - Start page with quick connect, recent hosts and the usual shortcuts
 - Settings page: colour scheme gallery, fonts, cursor, terminal, sidebar, SFTP and recovery
-  options, applied live and written to `config.toml`
-- Built-in schemes: Fogu Dark, Fogu Light, Solarized Dark, Dracula, Nocturne, Catppuccin Mocha;
+  options, applied live and written to `config.toml`; and the whole `config.toml` as text, saved
+  only when it loads
+- Built-in schemes: Nocturne (the default), Fogu Light, Solarized Dark, Dracula, Catppuccin
+  (Latte, Frappé, Macchiato, Mocha), Gruvbox (Dark, Light), Nord, Tokyo Night (Night, Storm, Moon,
+  Day), One Dark;
   fonts, cursor and every key binding configurable
 
 </details>
@@ -206,21 +273,24 @@ xcode-select --install
 <details>
 <summary><b>SSH manager</b></summary>
 
-- Sidebar with groups, search and quick connect (`user@host:port`)
-- Reads your `~/.ssh/config` live (Host, HostName, User, Port, IdentityFile, ProxyJump,
-  ProxyCommand, HostKeyAlias…) — no import step, nothing duplicated
+- Sidebar with groups, search and quick connect (`user@host:port`); right-click a profile →
+  "Use for new tabs" to open it in every new tab
+- Reads your `~/.ssh/config` (Host, HostName, User, Port, IdentityFile, ProxyJump,
+  ProxyCommand, HostKeyAlias…), again whenever it changes — no import step, nothing duplicated
 - Profile page that edits `config.toml` in place, keeping your comments and writing only the
   values you change: groups, icon, tab colour, background, authentication, network, scripts
 - Password, public key, ssh-agent and keyboard-interactive authentication
-- Strict `known_hosts` checking: a changed host key is never accepted silently
+- `known_hosts` checking: an unknown host asks first, a changed host key is never accepted
+  silently
 - Jump hosts, proxy commands, SOCKS5 and HTTP proxies — a proxied profile never falls back to a
   direct connection
 - Port forwarding: local, remote and dynamic (SOCKS5), managed live from a dialog
 - Agent and X11 forwarding (off by default, clearly flagged when on)
-- Connection reuse: tabs, splits and SFTP for the same host share one SSH connection
+- Connection reuse: tabs, splits and SFTP of the same profile share one SSH connection
 - Passwords and key passphrases stored in the system keyring (Secret Service, Keychain,
   Credential Manager), never on disk
-- Login scripts, starting directory, remembered directory, automatic reconnect with backoff
+- Login scripts, starting directory, optional remembered directory, optional automatic
+  reconnect
 
 </details>
 
@@ -230,11 +300,13 @@ xcode-select --install
 - Side panel on the same SSH connection: no second login
 - Follows the shell's working directory as you `cd`
 - Upload, download, drag and drop, rename, delete, new folder, permissions
-- Dropping files from the file manager needs X11 on Linux: under Wayland, start Fogu on
-  XWayland with `WAYLAND_DISPLAY= fogu` (or `WAYLAND_DISPLAY= ./Fogu.AppImage`)
-- Transfers with progress, cancel and resume
-- Hardened against hostile servers: sanitised names, disk-fill protection, downloaded files never
-  executable, nothing is ever launched from a remote listing
+- Dropping files from the file manager needs X11 on Linux: under Wayland, turn on Settings → SFTP
+  → *Enable drag & drop on Wayland* and restart; Fogu then opens on XWayland, so on HiDPI screens
+  it may look small or blurry, KDE's window blur is off and input methods (IBus, fcitx5) need
+  `XMODIFIERS` (its shells and the apps it opens stay on Wayland)
+- Transfers with progress and cancel; an existing target can be overwritten or resumed
+- Hardened against hostile servers: dangerous names refused, disk-fill protection, downloads not
+  executable by default, executables from the server are never opened
 
 </details>
 
@@ -245,7 +317,7 @@ Fogu works with no configuration. To customise it, edit `~/.config/fogu/config.t
 
 ```toml
 [appearance]
-color_scheme = "Dracula"   # built in: Fogu Dark, Fogu Light, Solarized Dark, Dracula, Nocturne, Catppuccin Mocha
+color_scheme = "Dracula"   # built in: Nocturne, Fogu Light, Solarized Dark, Dracula, Catppuccin Mocha… (Settings › Appearance)
 
 [[profiles]]
 id = "home-server"
@@ -275,7 +347,7 @@ Every action can be rebound under `[hotkeys]`. `Cmd` and `Option` are accepted a
 names on every system (the same keys as `Meta` and `Alt`); macOS shows them that way.
 
 ```
-fogu [--config-dir PATH] [--software-render] [--no-recovery]
+fogu [--config-dir PATH] [--software-render] [--no-recovery] [--licenses]
 ```
 
 </details>
@@ -287,3 +359,16 @@ privately through [GitHub security advisories](https://github.com/Revdep/Fogu/se
 Fogu is [MIT](LICENSE)-licensed and builds on [Alacritty](https://github.com/alacritty/alacritty),
 [iced](https://iced.rs) and [russh](https://github.com/Eugeny/russh); third-party notices are in
 [`THIRD_PARTY_LICENSES`](THIRD_PARTY_LICENSES).
+
+## Optional updates
+
+Fogu can tell you when a new version is out (Settings › Updates). It never installs anything on
+its own: you read what changed and choose Install, then it restarts with your tabs.
+
+- **Where:** Linux (binary and AppImage) updates itself; on macOS and Windows the page links to
+  the download for now.
+- **Safe:** every update is checked against Fogu's Ed25519 signature and its SHA-256 sums before
+  anything is replaced. If it fails, your current Fogu stays as it is.
+- **Turn it off:** set `FOGU_DISABLE_UPDATER=1`, or put a `.fogu-managed` file next to the
+  executable (package managers should do this). Builds from source have no updater.
+- **Needs** `curl`.

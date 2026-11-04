@@ -1,0 +1,14 @@
+# "Gruvbox Light". Third-party palette; see THIRD_PARTY_LICENSES.
+name = "Gruvbox Light"
+fg = "#3c3836"
+bg = "#fbf1c7"
+cursor = "#3c3836"
+cursor_text = "#fbf1c7"
+selection_bg = "#928374"
+selection_fg = "#3c3836"
+ansi = [
+    "#fbf1c7", "#cc241d", "#98971a", "#d79921",
+    "#458588", "#b16286", "#689d6a", "#7c6f64",
+    "#928374", "#9d0006", "#79740e", "#b57614",
+    "#076678", "#8f3f71", "#427b58", "#3c3836",
+]

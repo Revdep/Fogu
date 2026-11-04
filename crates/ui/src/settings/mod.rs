@@ -16,6 +16,7 @@ use std::str::FromStr;
 
 use fogu_core::config::{CursorShapeCfg, ProfileClick, RightClickAction};
 use fogu_core::{ColorScheme, Config, Osc52Policy};
+use iced::widget::text_editor;
 
 use crate::forms::FieldValue;
 
@@ -32,16 +33,23 @@ pub enum Page {
     Sftp,
     Ssh,
     Recovery,
+    /// `config.toml` as text.
+    File,
+    Updates,
+    Licenses,
 }
 
 impl Page {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 9] = [
         Self::Appearance,
         Self::Terminal,
         Self::Sidebar,
         Self::Sftp,
         Self::Ssh,
         Self::Recovery,
+        Self::File,
+        Self::Updates,
+        Self::Licenses,
     ];
 
     /// Title and the one-line summary under it in the nav column.
@@ -52,7 +60,10 @@ impl Page {
             Self::Sidebar => ("Profile sidebar", "Rows, recent, clicks"),
             Self::Sftp => ("SFTP", "Panel, downloads, limits"),
             Self::Ssh => ("SSH", "~/.ssh/config"),
+            Self::Licenses => ("About / Licenses", "Bundled third-party licenses"),
+            Self::Updates => ("Updates", "Optional updates and release notes"),
             Self::Recovery => ("Tab recovery", "Restore tabs on restart"),
+            Self::File => ("config.toml", "Every key, as text"),
         }
     }
 }
@@ -104,6 +115,7 @@ pub enum FieldId {
     MaxDownload,
     FreeSpace,
     KeepExecutable,
+    WaylandDragDrop,
     ReadSshConfig,
     RecoveryEnabled,
     RecoveryScrollback,
@@ -149,6 +161,12 @@ pub struct Settings {
     pub no_picker: Option<&'static str>,
     /// The SSH scrollback toggle waits for its explanation modal.
     pub pending_ssh_recovery: bool,
+    /// The config.toml page: the text being edited, as read when the page opened.
+    pub file: text_editor::Content,
+    /// The file's text when it was read or saved (the editor differs = unsaved changes).
+    pub file_saved: String,
+    /// Why the last Save was refused.
+    pub file_error: Option<String>,
 }
 
 impl Settings {
@@ -273,6 +291,7 @@ impl Settings {
                 s.free_space_reserve_bytes = number(v, s.free_space_reserve_bytes, 0, u64::MAX, 1)?;
             }
             F::KeepExecutable => s.keep_executable_bit = on(v)?,
+            F::WaylandDragDrop => s.wayland_drag_and_drop = on(v)?,
             F::ReadSshConfig => cfg.ssh.read_ssh_config = on(v)?,
             F::RecoveryEnabled => cfg.recovery.enabled = on(v)?,
             F::RecoveryScrollback => cfg.recovery.restore_scrollback = on(v)?,

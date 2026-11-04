@@ -51,7 +51,7 @@ fn arrows_skip_disabled_items_and_enter_runs_the_selection() {
 #[test]
 fn hsv_round_trips() {
     for hex in [
-        0x00_0000, 0xff_ffff, 0xff_0000, 0x00_ff00, 0x00_00ff, 0x76_7676, 0xe5_484d, 0x8e_4ec6,
+        0x00_0000, 0xff_ffff, 0xff_0000, 0x00_ff00, 0x00_00ff, 0x80_8080, 0xe5_484d, 0x8e_4ec6,
     ] {
         let c = RgbColor::from_hex(hex);
         let (h, s, v) = to_hsv(c);

@@ -434,3 +434,22 @@ fn floats_inside_a_profile_table_are_written_at_f32_precision() {
     let written = read(&t);
     assert!(written.contains("opacity = 0.85"), "{written}");
 }
+
+#[test]
+fn set_default_writes_a_top_level_key_and_clearing_removes_it() {
+    let t = tmp(Some(FIXTURE));
+    let config = edit_and_check(&t, &[ProfileEdit::SetDefault(Some(id("play")))]);
+    assert_eq!(config.default_profile, Some(id("play")));
+    let text = read(&t);
+    // A root key must come before the first table, or TOML would read it as the table's.
+    let key = text.find("default_profile = \"play\"").unwrap();
+    assert!(key < text.find("[[profiles]]").unwrap(), "{text}");
+    assert!(text.contains("# my config") && text.contains("id = \"work\"   # keep"));
+    let config = edit_and_check(&t, &[ProfileEdit::SetDefault(None)]);
+    assert_eq!(config.default_profile, None);
+    assert!(!read(&t).contains("default_profile"));
+    // No file yet: setting the default creates it.
+    let empty = tmp(None);
+    edit_profiles(&empty.0, &[ProfileEdit::SetDefault(Some(id("work")))]).unwrap();
+    assert!(read(&empty).contains("default_profile = \"work\""));
+}

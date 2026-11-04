@@ -301,13 +301,16 @@ pub fn rows(entries: &[Entry], config: &Config, recent: &Recent, now: u64) -> Ve
                 .as_ref()
                 .and_then(|g| config.groups.iter().find(|x| &x.id == g))
                 .map(|g| g.name.clone());
+            let used = recent.last_used(&p.id).map(|t| relative_time(now, t));
+            let detail = match (is_default(config, &p.id), used) {
+                (true, Some(used)) => format!("default · {used}"),
+                (true, None) => "default".to_owned(),
+                (false, used) => used.unwrap_or_default(),
+            };
             FuzzyRow {
                 title: sanitize_title(&p.name),
                 subtitle: e.subtitle.clone(),
-                detail: recent
-                    .last_used(&p.id)
-                    .map(|t| relative_time(now, t))
-                    .unwrap_or_default(),
+                detail,
                 keywords: group
                     .into_iter()
                     .chain((e.origin == Origin::SshConfig).then(|| "ssh config".to_owned()))
@@ -317,6 +320,14 @@ pub fn rows(entries: &[Entry], config: &Config, recent: &Recent, now: u64) -> Ve
             }
         })
         .collect()
+}
+
+/// Whether new tabs open profile `id`: `default_profile`, else the built-in default shell.
+pub fn is_default(config: &Config, id: &ProfileId) -> bool {
+    match &config.default_profile {
+        Some(default) => default == id,
+        None => *id == Profile::default_shell().id,
+    }
 }
 
 /// The sidebar's lines: with a query, the ranked matches; else Recent (up to

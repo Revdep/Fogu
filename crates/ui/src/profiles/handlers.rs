@@ -58,6 +58,8 @@ pub enum ProfilesMsg {
     /// "New group…" submitted: create it and move the menu's profile into it.
     NewGroup(String),
     Duplicate(ProfileId),
+    /// "Use for new tabs": new tabs open this profile from now on.
+    SetDefault(ProfileId),
     /// Open the profile editor on this entry (read-only for `~/.ssh/config` hosts; built-in and
     /// quick-connect ones are saved as a new profile).
     Edit(ProfileId),
@@ -220,6 +222,7 @@ impl App {
             | ProfilesMsg::SetGroup(_)
             | ProfilesMsg::NewGroup(_)
             | ProfilesMsg::Duplicate(_)
+            | ProfilesMsg::SetDefault(_)
             | ProfilesMsg::Edit(_)
             | ProfilesMsg::CopySsh(_)
             | ProfilesMsg::AskDelete(_) => return self.on_profile_menu(message),

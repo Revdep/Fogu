@@ -1,4 +1,4 @@
-# "Nocturne", the colours of the Nocturne chrome.
+# "Nocturne", the default scheme: the colours of the Nocturne chrome.
 name = "Nocturne"
 fg = "#cfd3e5"
 bg = "#161826"
@@ -7,8 +7,8 @@ cursor_text = "#161826"
 selection_bg = "#423a6a"
 selection_fg = "#f3f5fe"
 ansi = [
-    "#292b31", "#ff615a", "#b1e969", "#ebd99c",
-    "#968ae0", "#e86aff", "#82fff7", "#dedacf",
-    "#75798c", "#f58c80", "#ddf88f", "#eee5b2",
-    "#b5abfc", "#ddaaff", "#b7fff9", "#f3f5fe",
+    "#292b31", "#ef6f7d", "#9bd67f", "#e8c77e",
+    "#968ae0", "#d58cf0", "#6fd0d8", "#d9dbe8",
+    "#75798c", "#f7929c", "#b7e89d", "#f2d9a0",
+    "#b5abfc", "#e6b0f7", "#95e3e8", "#f3f5fe",
 ]

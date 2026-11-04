@@ -149,6 +149,9 @@ impl TestSshd {
         if let Some(banner) = &options.banner {
             fs::write(dir.join("banner"), banner).expect("write banner");
         }
+        // The login shell's `ZDOTDIR` (see `config_text`); a file in it keeps zsh from starting
+        // its new-user setup.
+        fs::write(dir.join(".zshrc"), "").expect("write .zshrc");
         // sshd as root insists on its privilege-separation directory.
         let _already_there = fs::create_dir_all("/run/sshd");
         let user = run_ok(Command::new("id").arg("-un"));
@@ -281,12 +284,15 @@ pub fn pub_without_comment(path: &Path) -> String {
 
 fn config_text(dir: &TempDir, port: u16, options: &Options) -> String {
     let d = dir.path().display();
+    // `ZDOTDIR` (the test dir, with an empty `.zshrc`): a zsh login shell skips the developer's
+    // startup files, where an ssh-agent plugin would replace the forwarded agent with their own.
     let mut config = format!(
         "ListenAddress 127.0.0.1\nPort {port}\nHostKey {d}/host_ed25519\nPidFile {d}/sshd.pid\n\
          AuthorizedKeysFile {d}/authorized_keys\nPasswordAuthentication no\n\
          KbdInteractiveAuthentication no\nPubkeyAuthentication yes\nUsePAM no\nStrictModes no\n\
          PermitRootLogin prohibit-password\nPrintMotd no\nPrintLastLog no\nLogLevel ERROR\n\
-         AllowTcpForwarding yes\n"
+         AllowTcpForwarding yes\n\
+         SetEnv ZDOTDIR={d}\n"
     );
     if options.banner.is_some() {
         let _infallible = writeln!(config, "Banner {d}/banner");

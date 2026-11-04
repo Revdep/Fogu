@@ -7,20 +7,25 @@ its own licence. The Rust crates compiled into the binary, with their licence te
 
 ## Built-in colour schemes
 
-- **Fogu Dark**, **Fogu Light** (`assets/schemes/fogu-dark.toml`,
-  `assets/schemes/fogu-light.toml`, and the matching `ColorScheme::default()` values in
-  `crates/core/src/scheme.rs`): colour values copied from Tabby
-  (<https://github.com/Eugeny/tabby>), `tabby-terminal/src/colorSchemes.ts`
-  (`DefaultColorSchemes.defaultColorScheme` / `.defaultLightColorScheme`). Tabby is MIT-licensed,
-  Copyright (c) 2017 Tabby Developers (Eugeny).
 - **Solarized Dark** (`assets/schemes/solarized-dark.toml`): Ethan Schoonover's Solarized palette
   (<https://ethanschoonover.com/solarized/>), MIT-licensed, Copyright (c) 2011 Ethan Schoonover.
 - **Dracula** (`assets/schemes/dracula.toml`): the official Dracula palette and ANSI mapping
   (<https://draculatheme.com/>, <https://github.com/dracula/dracula-theme>,
   <https://github.com/dracula/iterm>), MIT-licensed, Copyright (c) 2016 Dracula Theme.
-- **Catppuccin Mocha** (`assets/schemes/catppuccin-mocha.toml`): the official Catppuccin Mocha
-  terminal palette (<https://catppuccin.com>, <https://github.com/catppuccin/alacritty>),
-  MIT-licensed, Copyright (c) 2021 Catppuccin.
+- **Catppuccin Latte, Frappé, Macchiato, Mocha** (`assets/schemes/catppuccin-*.toml`): the
+  official Catppuccin terminal palettes (<https://catppuccin.com>,
+  <https://github.com/catppuccin/alacritty>), MIT-licensed, Copyright (c) 2021 Catppuccin.
+- **Gruvbox Dark, Gruvbox Light** (`assets/schemes/gruvbox-*.toml`): the gruvbox palette by
+  morhetz (Pavel Pertsev) (<https://github.com/morhetz/gruvbox>), MIT/X11-licensed.
+- **Nord** (`assets/schemes/nord.toml`): the Nord palette (<https://www.nordtheme.com>,
+  <https://github.com/nordtheme/nord>), MIT-licensed, Copyright (c) 2016-present Sven Greb.
+- **Tokyo Night, Storm, Moon, Day** (`assets/schemes/tokyo-night*.toml`): Folke Lemaitre's
+  terminal palettes (<https://github.com/folke/tokyonight.nvim>, `extras/alacritty`),
+  Apache-2.0-licensed, Copyright (c) Folke Lemaitre; after enkia's Tokyo Night
+  (<https://github.com/enkia/tokyo-night-vscode-theme>, MIT).
+- **One Dark** (`assets/schemes/one-dark.toml`): the terminal colours of Josh Dick's onedark.vim
+  (<https://github.com/joshdick/onedark.vim>), after Atom's One Dark, MIT-licensed, Copyright (c)
+  2015 Joshua Dick.
 
 ## Interface font
 

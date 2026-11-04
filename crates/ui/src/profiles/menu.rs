@@ -1,5 +1,5 @@
 //! The profile row menu: Connect, Connect in split, Open SFTP, Edit… (the profile editor),
-//! Duplicate, Copy ssh command, Move to group ▸, Delete. Editing items are enabled for stored
+//! Duplicate, Use for new tabs, Copy ssh command, Move to group ▸, Delete. Editing items are enabled for stored
 //! profiles only; a `~/.ssh/config` host offers "Copy to my profiles" instead of Duplicate.
 
 use fogu_core::config::ProfileEdit;
@@ -56,6 +56,16 @@ pub(super) fn row_menu(anchor: iced::Point, entry: &Entry, config: &Config) -> C
         "Duplicate"
     };
     items.push(item(duplicate, ProfilesMsg::Duplicate(id.clone()), true));
+    // Stored and built-in profiles: the ones `default_profile` can name.
+    if matches!(entry.origin, Origin::Stored | Origin::Builtin) {
+        let default = super::is_default(config, &id);
+        let label = if default {
+            "✓ Used for new tabs"
+        } else {
+            "Use for new tabs"
+        };
+        items.push(item(label, ProfilesMsg::SetDefault(id.clone()), !default));
+    }
     if ssh {
         let mut copy = item(
             "Copy ssh command",
@@ -112,6 +122,7 @@ impl App {
         let target = match &message {
             ProfilesMsg::Menu(id, _)
             | ProfilesMsg::Duplicate(id)
+            | ProfilesMsg::SetDefault(id)
             | ProfilesMsg::Edit(id)
             | ProfilesMsg::CopySsh(id)
             | ProfilesMsg::AskDelete(id) => Some(id.clone()),
@@ -146,6 +157,13 @@ impl App {
                 return self.new_group(&name);
             }
             ProfilesMsg::Duplicate(_) => return self.duplicate(&entry),
+            ProfilesMsg::SetDefault(id)
+                if matches!(entry.origin, Origin::Stored | Origin::Builtin) =>
+            {
+                // The built-in default shell is what an unset key means: keep the file clean.
+                let id = (id != fogu_core::Profile::default_shell().id).then_some(id);
+                return self.save_edits(&[ProfileEdit::SetDefault(id)]);
+            }
             ProfilesMsg::Edit(_) => return self.edit_entry(&entry),
             ProfilesMsg::CopySsh(_) => return self.copy_ssh(&entry.profile),
             ProfilesMsg::AskDelete(_) if entry.origin == Origin::Stored => {

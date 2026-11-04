@@ -202,6 +202,8 @@ pub enum Message {
     Editor(TabId, EditorMsg),
     /// The settings tab.
     Settings(crate::settings::SettingsMsg),
+    /// Optional updater actions and worker results.
+    Update(crate::updater::UpdateMsg),
     /// A start page tab.
     Welcome(crate::tab::TabId, crate::welcome::WelcomeMsg),
     /// The "close live SSH session?" modal: `true` = close, `false` = keep it.

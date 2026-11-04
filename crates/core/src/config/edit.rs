@@ -37,6 +37,8 @@ pub enum ProfileEdit {
     AddGroup(Group),
     /// Remove a stored profile.
     Delete(ProfileId),
+    /// Set the profile new tabs open (`default_profile`); `None` = the built-in default shell.
+    SetDefault(Option<ProfileId>),
     /// Save the profile editor: stored profile `old.id` becomes `new`. Only the keys whose value
     /// differs between `old` (the profile as the editor opened it) and `new` are written, each
     /// in place; keys Fogu doesn't know are never touched.
@@ -68,6 +70,7 @@ impl ProfileEdit {
             }
             Self::AddGroup(group) => config.groups.push(group.clone()),
             Self::Delete(id) => config.profiles.retain(|p| &p.id != id),
+            Self::SetDefault(id) => config.default_profile.clone_from(id),
             Self::Update { old, new } => {
                 if let Some(p) = config.profiles.iter_mut().find(|p| p.id == old.id) {
                     *p = Profile::clone(new);
@@ -80,12 +83,15 @@ impl ProfileEdit {
 /// Applies `edits` in order to `dir/config.toml` and writes it once (atomic, 0600, previous
 /// file as `.bak`). The file must exist and parse, and every profile an edit names must be in
 /// it; otherwise nothing is written. When the file does not exist yet and only additions are
-/// asked for (`Add`, `AddGroup`), it is created.
+/// asked for (`Add`, `AddGroup`, `SetDefault`), it is created.
 pub fn edit_profiles(dir: &Path, edits: &[ProfileEdit]) -> Result<(), ConfigError> {
     let path = dir.join(FILE_NAME);
-    let additions = edits
-        .iter()
-        .all(|e| matches!(e, ProfileEdit::Add(_) | ProfileEdit::AddGroup(_)));
+    let additions = edits.iter().all(|e| {
+        matches!(
+            e,
+            ProfileEdit::Add(_) | ProfileEdit::AddGroup(_) | ProfileEdit::SetDefault(_)
+        )
+    });
     let mut doc = read_doc(&path, additions)?;
     let parse_error = |message: String| ConfigError::Parse {
         path: path.clone(),
@@ -212,6 +218,12 @@ fn apply_to_doc(doc: &mut DocumentMut, edit: &ProfileEdit) -> Result<(), DocErro
             profiles(doc)?.remove(index);
         }
         ProfileEdit::Update { old, new } => update(doc, old, new)?,
+        ProfileEdit::SetDefault(Some(id)) => {
+            doc.insert("default_profile", value(id.0.as_str()));
+        }
+        ProfileEdit::SetDefault(None) => {
+            doc.remove("default_profile");
+        }
     }
     Ok(())
 }

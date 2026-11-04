@@ -176,6 +176,7 @@ impl App {
         }
         let settings = tab.settings.as_deref()?;
         let cx = crate::settings::Ctx {
+            updater: &self.updater,
             config: &self.config,
             colors: &self.colors,
             look: self.look,
@@ -281,6 +282,7 @@ impl App {
             .or_else(|| self.delete_modal())
             .or_else(|| self.clear_sessions_modal())
             .or_else(|| self.ssh_recovery_modal())
+            .or_else(|| self.update_modal())
             .or_else(|| self.discard_modal());
         let base = overlay(base, modal);
         let dialog = self

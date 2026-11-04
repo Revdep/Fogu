@@ -229,13 +229,13 @@ mod tests {
     fn resolves_against_the_scheme() {
         let colors = Colors::new(&ColorScheme::default());
         let cases = [
-            (Color::Named(NamedColor::Red), false, rgb(0xff_615a)),
-            (Color::Named(NamedColor::Red), true, rgb(0xf5_8c80)),
-            (Color::Indexed(1), true, rgb(0xf5_8c80)),
-            (Color::Indexed(9), false, rgb(0xf5_8c80)),
-            (Color::Named(NamedColor::Foreground), false, rgb(0xca_caca)),
-            (Color::Named(NamedColor::Background), true, rgb(0x17_1717)),
-            (Color::Named(NamedColor::Cursor), false, rgb(0xbb_bbbb)),
+            (Color::Named(NamedColor::Red), false, rgb(0xef_6f7d)),
+            (Color::Named(NamedColor::Red), true, rgb(0xf7_929c)),
+            (Color::Indexed(1), true, rgb(0xf7_929c)),
+            (Color::Indexed(9), false, rgb(0xf7_929c)),
+            (Color::Named(NamedColor::Foreground), false, rgb(0xcf_d3e5)),
+            (Color::Named(NamedColor::Background), true, rgb(0x16_1826)),
+            (Color::Named(NamedColor::Cursor), false, rgb(0xb5_abfc)),
             // Cube: 16 + 36*1 + 6*2 + 3 → (95, 135, 175).
             (Color::Indexed(67), false, rgb(0x5f_87af)),
             // Gray ramp start/end.
@@ -247,16 +247,16 @@ mod tests {
         for (color, bold, want) in cases {
             assert_eq!(colors.resolve(color, bold), want, "{color:?} bold={bold}");
         }
-        assert_eq!(colors.cursor_text(), rgb(0x17_1717));
+        assert_eq!(colors.cursor_text(), rgb(0x16_1826));
     }
 
     #[test]
     fn dim_variants_follow_the_scheme() {
         let colors = Colors::new(&ColorScheme::default());
-        // 0xff_615a * 2/3 per channel.
+        // 0xef_6f7d at two thirds per channel (rounded down).
         assert_eq!(
             colors.resolve(Color::Named(NamedColor::DimRed), false),
-            rgb(0xaa_403c)
+            rgb(0x9e_4a52)
         );
         assert_eq!(colors.palette().len(), 269);
     }

@@ -309,3 +309,77 @@ fn a_message_that_writes_the_config_first_takes_in_an_external_edit() {
     let _ = app.update(Message::Settings(SettingsMsg::Page(Page::Terminal)));
     assert!(app.config.profiles.iter().any(|p| p.id.0 == "late"));
 }
+
+#[test]
+fn updater_toast_opens_updates_without_downloading() {
+    let t = tmp();
+    let mut app = opened(&t);
+    let id = app.toasts.push(
+        crate::notifications::Notification::new(Level::Info, "Fogu 0.1.7 is available")
+            .action(crate::notifications::ToastAction::Update),
+    );
+    let _ = app.update(Message::ToastAccept(id));
+    assert_eq!(
+        app.active_tab().unwrap().settings.as_ref().unwrap().page,
+        Page::Updates
+    );
+    assert!(!app.update_busy());
+    assert!(app.toasts.get(id).is_none());
+}
+
+#[test]
+fn the_config_file_page_saves_only_text_that_loads_and_applies_it() {
+    use iced::widget::text_editor::Content;
+
+    fn page(app: &mut App) -> &mut super::Settings {
+        app.tabs
+            .iter_mut()
+            .find_map(|tab| tab.settings.as_deref_mut())
+            .unwrap()
+    }
+    let t = tmp();
+    let mut app = opened(&t);
+    let settings_msg = |app: &mut App, m: SettingsMsg| {
+        let _ = app.update(Message::Settings(m));
+    };
+    settings_msg(&mut app, SettingsMsg::Page(Page::File));
+    let original = file(&t);
+    assert_eq!(page(&mut app).file.text().trim_end(), original.trim_end());
+
+    page(&mut app).file = Content::with_text("[appearance\n");
+    settings_msg(&mut app, SettingsMsg::FileSave);
+    assert!(page(&mut app).file_error.is_some());
+    assert_eq!(
+        file(&t),
+        original,
+        "a file that would not load is not written"
+    );
+
+    let edited = format!("{original}\n[terminal]\nwheel_lines = 9\n");
+    page(&mut app).file = Content::with_text(&edited);
+    settings_msg(&mut app, SettingsMsg::FileSave);
+    assert!(page(&mut app).file_error.is_none());
+    assert!(file(&t).contains("wheel_lines = 9"));
+    assert_eq!(app.config.terminal.wheel_lines, 9, "applied at once");
+    assert_eq!(*app.config, load(&t.0).0);
+
+    // Revert drops unsaved typing.
+    page(&mut app).file = Content::with_text("typing");
+    settings_msg(&mut app, SettingsMsg::FileRevert);
+    assert!(page(&mut app).file.text().contains("wheel_lines = 9"));
+}
+
+#[test]
+fn wayland_drag_and_drop_is_off_by_default_and_written_when_turned_on() {
+    let t = tmp();
+    let mut app = opened(&t);
+    assert!(!app.config.sftp.wayland_drag_and_drop);
+    field(&mut app, FieldId::WaylandDragDrop, FieldValue::Bool(true));
+    assert!(
+        file(&t).contains("wayland_drag_and_drop = true"),
+        "{}",
+        file(&t)
+    );
+    let (back, _) = load(&t.0);
+    assert!(back.sftp.wayland_drag_and_drop);
+}

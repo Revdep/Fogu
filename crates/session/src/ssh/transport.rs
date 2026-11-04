@@ -315,6 +315,8 @@ fn spawn_proxy(
             let shell = std::env::var_os("SHELL")
                 .filter(|s| std::path::Path::new(s).is_absolute())
                 .unwrap_or_else(|| "/bin/sh".into());
+            // Inherits Fogu's environment: no `WAYLAND_DISPLAY` when Fogu runs on XWayland, which
+            // only matters for a GUI askpass/pinentry started by the command.
             let mut process = Command::new(shell);
             process
                 .arg("-c")

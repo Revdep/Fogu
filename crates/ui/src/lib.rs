@@ -50,6 +50,8 @@ mod tab;
 mod tab_bar;
 mod terminal_view;
 mod tokens;
+#[doc(hidden)]
+pub mod updater;
 mod view;
 mod welcome;
 
@@ -155,6 +157,18 @@ pub fn run(config: Arc<Config>, options: RunOptions) -> Result {
     .subscription(app::App::subscription)
     .window(window)
     .run()
+}
+
+/// Licenses shipped in the executable, so replacing it cannot leave stale sidecars.
+pub fn licenses() -> String {
+    use std::io::Read as _;
+    let mut text = String::from(include_str!("../../../THIRD_PARTY_LICENSES"));
+    let mut decoder =
+        flate2::read::GzDecoder::new(&include_bytes!("../../../assets/updater/notices.gz")[..]);
+    if decoder.read_to_string(&mut text).is_err() {
+        text.push_str("\nCould not decode third-party crate licenses");
+    }
+    text
 }
 
 #[cfg(test)]

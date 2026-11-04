@@ -73,15 +73,26 @@ impl App {
         id
     }
 
-    /// `config.default_profile`, or the built-in default shell.
+    /// `config.default_profile` (a stored or built-in profile), or the built-in default shell
+    /// (as the sidebar lists it: named after the computer).
     pub(crate) fn default_profile(&self) -> Profile {
         let config = &self.config;
+        let find = |id: &fogu_core::ProfileId| {
+            config
+                .profiles
+                .iter()
+                .chain(&self.profiles.builtins)
+                .find(|p| &p.id == id)
+                .cloned()
+        };
+        let shell = Profile::default_shell();
+        // A default that no longer exists falls back like an unset one.
         config
             .default_profile
             .as_ref()
-            .and_then(|id| config.profiles.iter().find(|p| &p.id == id))
-            .cloned()
-            .unwrap_or_else(Profile::default_shell)
+            .and_then(find)
+            .or_else(|| find(&shell.id))
+            .unwrap_or(shell)
     }
 
     /// Opens `profile` (local `cwd` override for "new tab here") in a new last tab and
@@ -445,6 +456,9 @@ impl App {
 
     /// Closes every pane of tab `id`; the tab goes with its last pane.
     pub(crate) fn close_tab(&mut self, id: TabId) -> Task<Message> {
+        if self.tabs.len() == 1 && self.update_busy() {
+            return self.update(Message::CloseRequested);
+        }
         let Some(tab) = self.tabs.iter().find(|t| t.id == id) else {
             return Task::none();
         };
@@ -462,6 +476,9 @@ impl App {
 
     /// Drops tab `id` (its panes close their sessions); exits the app after the last tab.
     pub(crate) fn remove_tab(&mut self, id: TabId) -> Task<Message> {
+        if self.tabs.len() == 1 && self.update_busy() {
+            return self.on_update(crate::updater::UpdateMsg::Open);
+        }
         let Some(index) = self.tabs.iter().position(|t| t.id == id) else {
             return Task::none();
         };

@@ -529,3 +529,22 @@ fn an_ssh_config_host_copied_to_the_profiles_is_listed_once_as_the_copy() {
         ]
     );
 }
+
+#[test]
+fn use_for_new_tabs_sets_and_clears_the_default_profile() {
+    let t = tmp();
+    let mut app = app_in(&t.0);
+    let shell = Profile::default_shell().id;
+    assert!(is_default(&app.config, &shell));
+    send(&mut app, ProfilesMsg::SetDefault(id("pi")));
+    assert_eq!(app.config.default_profile, Some(id("pi")));
+    assert_eq!(app.default_profile().id, id("pi"));
+    assert!(is_default(&app.config, &id("pi")) && !is_default(&app.config, &shell));
+    assert_eq!(load(&t.0).0, *app.config);
+    // Back to the built-in default shell: the key goes away.
+    send(&mut app, ProfilesMsg::SetDefault(shell.clone()));
+    assert_eq!(app.config.default_profile, None);
+    assert_eq!(app.default_profile().id, shell);
+    let text = std::fs::read_to_string(t.0.join("config.toml")).unwrap();
+    assert!(!text.contains("default_profile") && text.starts_with("# hand-written\n"));
+}

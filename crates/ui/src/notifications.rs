@@ -34,6 +34,8 @@ pub enum Level {
 /// Buttons a toast can carry besides the dismiss `×`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ToastAction {
+    /// Opens the update page without downloading.
+    Update,
     /// OSC 52 write waiting for the user's decision: "Copy" applies it, "Deny" drops it.
     ClipboardWrite,
     /// A quick connect just opened: "Save as profile…" opens the editor on it.
@@ -97,7 +99,11 @@ impl Notification {
 
     /// Whether the toast removes itself after [`AUTO_DISMISS`].
     pub fn auto_dismisses(&self) -> bool {
-        self.level != Level::Error && self.action != Some(ToastAction::ClipboardWrite)
+        self.level != Level::Error
+            && !matches!(
+                self.action,
+                Some(ToastAction::ClipboardWrite | ToastAction::Update)
+            )
     }
 
     /// Whether its time is up at `now`.
@@ -199,6 +205,15 @@ fn toast_view(note: &Notification, look: Look) -> Element<'_, Message> {
         body = body.push(text(&note.detail).size(13).color(look.dim));
     }
     match &note.action {
+        Some(ToastAction::Update) => {
+            body = body.push(
+                row![
+                    flat("Update", Message::ToastAccept(id)),
+                    flat("Later", Message::DismissToast(id))
+                ]
+                .spacing(8),
+            );
+        }
         Some(ToastAction::ClipboardWrite) => {
             body = body.push(
                 row![

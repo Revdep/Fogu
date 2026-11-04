@@ -16,6 +16,15 @@ tracing-subscriber = { workspace = true }
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true }
 
+[dev-dependencies]
+# tests/updater_e2e.rs builds and signs its own releases
+flate2.workspace = true
+ring.workspace = true
+semver.workspace = true
+serde_json.workspace = true
+tar.workspace = true
+zipsign-api = { workspace = true, features = ["sign-tar"] }
+
 [features]
 default = ["ssh"]
 # SSH sessions (forwards `fogu-ui/ssh`).

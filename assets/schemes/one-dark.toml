@@ -1,0 +1,14 @@
+# "One Dark". Third-party palette; see THIRD_PARTY_LICENSES.
+name = "One Dark"
+fg = "#abb2bf"
+bg = "#282c34"
+cursor = "#abb2bf"
+cursor_text = "#282c34"
+selection_bg = "#3e4452"
+selection_fg = "#abb2bf"
+ansi = [
+    "#282c34", "#e06c75", "#98c379", "#e5c07b",
+    "#61afef", "#c678dd", "#56b6c2", "#abb2bf",
+    "#3e4452", "#be5046", "#98c379", "#d19a66",
+    "#61afef", "#c678dd", "#56b6c2", "#5c6370",
+]

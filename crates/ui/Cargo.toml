@@ -23,7 +23,23 @@ dirs.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
+serde.workspace = true
+ring.workspace = true
+semver.workspace = true
+flate2.workspace = true
+
+# The zip side also builds on Linux: the release gate checks every archive there (debug builds).
+zipsign-api = { workspace = true, features = ["verify-zip"] }
+zip.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zipsign-api = { workspace = true, features = ["verify-tar"] }
+tar.workspace = true
+
 [features]
 default = ["ssh"]
 # SSH sessions (forwards `fogu-session/ssh`).
 ssh = ["fogu-session/ssh"]
+
+[target.'cfg(target_os = "windows")'.dependencies]
+self-replace.workspace = true

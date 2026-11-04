@@ -100,14 +100,19 @@ impl App {
     pub(super) fn wayland_drop_hint(&mut self) -> Task<Message> {
         #[cfg(unix)]
         {
-            let wayland = std::env::var_os("WAYLAND_DISPLAY").is_some_and(|v| !v.is_empty());
-            if !wayland || self.desktop.hinted {
+            if !fogu_core::platform::on_wayland() || self.desktop.hinted {
                 return Task::none();
             }
             self.desktop.hinted = true;
-            let note = Notification::new(Level::Info, "Drag and drop").detail(
-                "Dropping files onto the panel needs X11 for now \u{2014} use Upload\u{2026}",
-            );
+            // On but still on Wayland: not restarted yet, or no XWayland answered at start-up.
+            let detail = if self.config.sftp.wayland_drag_and_drop {
+                "Dropping files onto the panel needs X11: restart Fogu (XWayland must be running), \
+                 or use Upload\u{2026}"
+            } else {
+                "Dropping files onto the panel needs X11 for now: turn on Settings \u{2192} SFTP \u{2192} \
+                 Enable drag & drop on Wayland, or use Upload\u{2026}"
+            };
+            let note = Notification::new(Level::Info, "Drag and drop").detail(detail);
             self.notify(note)
         }
         #[cfg(windows)]
@@ -325,10 +330,47 @@ fn is_executable(meta: &std::fs::Metadata) -> bool {
 async fn open_target(target: &std::ffi::OsStr) -> Result<(), String> {
     let target = target.to_owned();
     let shown = display_name(&target.to_string_lossy());
-    tokio::task::spawn_blocking(move || open::that(&target))
+    tokio::task::spawn_blocking(move || open_with_display(&target))
         .await
         .map_err(|err| format!("open: {err}"))?
         .map_err(|err| format!("could not open {shown}: {err}"))
+}
+
+/// `open::that`, with the session's Wayland display given back to the opener when Fogu moved
+/// itself to `XWayland` (`[sftp] wayland_drag_and_drop`): otherwise the app it starts finds no
+/// Wayland display and, with `GDK_BACKEND=wayland` or `QT_QPA_PLATFORM=wayland`, fails to open.
+/// Same rules as `open::that`: the first launcher that starts decides the result.
+fn open_with_display(target: &std::ffi::OsStr) -> std::io::Result<()> {
+    let kept = fogu_core::platform::kept_wayland_display();
+    launch(open::commands(target), kept.as_deref())
+}
+
+/// Runs `commands` in order until one starts (`kept` set as `WAYLAND_DISPLAY` on each); that one
+/// decides the result, as in `open::that`.
+fn launch(
+    commands: Vec<std::process::Command>,
+    kept: Option<&std::ffi::OsStr>,
+) -> std::io::Result<()> {
+    let mut last_err = None;
+    for mut cmd in commands {
+        fogu_core::platform::give_back_wayland(&mut cmd, kept);
+        let status = cmd
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        match status {
+            Ok(status) if status.success() => return Ok(()),
+            Ok(status) => {
+                let launcher = cmd.get_program().to_string_lossy().into_owned();
+                return Err(std::io::Error::other(format!(
+                    "{launcher} failed with {status}"
+                )));
+            }
+            Err(err) => last_err = Some(err),
+        }
+    }
+    Err(last_err.unwrap_or_else(|| std::io::Error::other("no launcher to open it")))
 }
 
 /// Whether a file picker can open: always on Windows and macOS (native dialog), else `zenity`
@@ -428,7 +470,7 @@ mod tests {
 
     use std::os::unix::fs::PermissionsExt as _;
 
-    use super::refuse_open;
+    use super::{launch, refuse_open};
 
     #[test]
     fn executables_and_missing_paths_are_not_opened() {
@@ -520,5 +562,31 @@ mod tests {
             assert_eq!(refuse_open(&path), Ok(()), "{name}");
         }
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_opener_gets_the_kept_wayland_display_and_the_first_launcher_decides() {
+        let sh = |script: &str| {
+            let mut cmd = std::process::Command::new("/bin/sh");
+            cmd.args(["-c", script]);
+            cmd
+        };
+        let missing = || std::process::Command::new("/nonexistent/fogu-opener");
+        let wants = r#"test "$WAYLAND_DISPLAY" = wayland-9"#;
+        let kept = Some(std::ffi::OsStr::new("wayland-9"));
+        assert!(
+            launch(vec![sh(wants)], kept).is_ok(),
+            "the display is given back"
+        );
+        assert!(
+            launch(vec![missing(), sh(wants)], kept).is_ok(),
+            "a missing launcher is skipped"
+        );
+        assert!(
+            launch(vec![sh("exit 3"), sh("exit 0")], kept).is_err(),
+            "a launcher that ran decides"
+        );
+        assert!(launch(vec![missing()], kept).is_err());
+        assert!(launch(Vec::new(), None).is_err());
     }
 }

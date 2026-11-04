@@ -1,14 +1,15 @@
-# "Fogu Light". Third-party palette; see THIRD_PARTY_LICENSES.
+# "Fogu Light": Nocturne's violet on a soft white. On a light ground the bright colours are the
+# deeper ones, so bold text stays readable.
 name = "Fogu Light"
-fg = "#4d4d4c"
-bg = "#ffffff"
-cursor = "#4d4d4c"
-cursor_text = "#ffffff"
-selection_bg = "#4d4d4c"
-selection_fg = "#ffffff"
+fg = "#2e3140"
+bg = "#f7f7fa"
+cursor = "#6a5fd0"
+cursor_text = "#f7f7fa"
+selection_bg = "#d8d4f7"
+selection_fg = "#2e3140"
 ansi = [
-    "#000000", "#c82829", "#718c00", "#eab700",
-    "#4271ae", "#8959a8", "#3e999f", "#ffffff",
-    "#000000", "#c82829", "#718c00", "#eab700",
-    "#4271ae", "#8959a8", "#3e999f", "#ffffff",
+    "#2e3140", "#c4374a", "#3f7f2c", "#8a6a00",
+    "#3b5bc4", "#8e3fb0", "#1f7a83", "#c9cbd6",
+    "#6b6f85", "#b02e40", "#356e25", "#765b00",
+    "#2f4fb5", "#7b349a", "#1a6a72", "#e8e9f0",
 ]

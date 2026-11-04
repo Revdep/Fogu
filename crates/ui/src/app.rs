@@ -48,6 +48,7 @@ const CONFIG_POLL: Duration = Duration::from_secs(1);
     reason = "independent UI flags, not a state machine"
 )]
 pub struct App {
+    pub(crate) updater: crate::updater::Updater,
     pub(crate) runtime: Arc<SessionRuntime>,
     pub(crate) config: Arc<Config>,
     pub(crate) tabs: Vec<Tab>,
@@ -169,6 +170,7 @@ impl App {
             toasts.push(note);
         }
         Self {
+            updater: crate::updater::Updater::default(),
             runtime,
             tabs: Vec::new(),
             active: TabId(0),
@@ -255,8 +257,15 @@ impl App {
         app.exit_after_first_frame = options.exit_after_first_frame;
         app.config_dir = options.config_dir;
         app.state_dir.clone_from(&options.state_dir);
+        app.init_updater(options.no_recovery);
         app.remember_config_file();
         let mut tasks = vec![app.refresh_ssh_hosts()];
+        if !app.exit_after_first_frame && option_env!("FOGU_UPDATER") == Some("automatic") {
+            tasks.push(app.after(
+                Duration::from_secs(60),
+                Message::Update(crate::updater::UpdateMsg::Check(true)),
+            ));
+        }
         tasks.push(app.after(CONFIG_POLL, Message::ConfigTick));
         let mut restored = false;
         let mut deferred_restore = false;
@@ -412,6 +421,11 @@ impl App {
             Message::LinkHover(..) | Message::OpenLink(..) | Message::CopyLink(_) => {
                 self.on_link_message(message)
             }
+            Message::CloseRequested if self.update_busy() => self.notify(Notification::new(
+                Level::Info,
+                "Please wait for the update to finish before closing Fogu",
+            )),
+            Message::Update(message) => self.on_update(message),
             Message::CloseRequested => {
                 self.save_on_exit();
                 iced::exit()

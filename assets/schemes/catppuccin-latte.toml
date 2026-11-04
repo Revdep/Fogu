@@ -1,0 +1,14 @@
+# "Catppuccin Latte". Third-party palette; see THIRD_PARTY_LICENSES.
+name = "Catppuccin Latte"
+fg = "#4c4f69"
+bg = "#eff1f5"
+cursor = "#dc8a78"
+cursor_text = "#eff1f5"
+selection_bg = "#acb0be"
+selection_fg = "#4c4f69"
+ansi = [
+    "#bcc0cc", "#d20f39", "#40a02b", "#df8e1d",
+    "#1e66f5", "#ea76cb", "#179299", "#5c5f77",
+    "#acb0be", "#d20f39", "#40a02b", "#df8e1d",
+    "#1e66f5", "#ea76cb", "#179299", "#6c6f85",
+]

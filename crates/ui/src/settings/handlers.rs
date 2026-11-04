@@ -12,6 +12,7 @@ use fogu_core::{Config, config};
 use iced::Task;
 use iced::advanced::widget::operate;
 use iced::advanced::widget::operation::focusable;
+use iced::widget::text_editor;
 use secrecy::SecretString;
 
 use super::{FieldId, Page, Settings};
@@ -36,6 +37,12 @@ pub enum SettingsMsg {
     Picked(Option<PathBuf>),
     /// The answer to the SSH scrollback explanation.
     ConfirmSshRecovery(bool),
+    /// An edit in the config.toml page.
+    FileEdit(text_editor::Action),
+    /// "Save" on the config.toml page.
+    FileSave,
+    /// "Revert" on the config.toml page: the file as it is on disk.
+    FileRevert,
     /// Loading or creating the SSH scrollback key finished; `enable` came from the UI prompt.
     SshRecoveryKeyLoaded {
         enable: bool,
@@ -78,11 +85,30 @@ impl App {
                 return self.ssh_recovery_key_loaded(enable, result);
             }
             SettingsMsg::Page(page) => {
+                let dir = config::config_dir(self.config_dir.as_deref());
                 if let Some(s) = self.settings_tab().and_then(|t| t.settings.as_deref_mut()) {
                     s.page = page;
+                    // Unsaved typing survives a page switch; otherwise show the file as it is now.
+                    if page == Page::File && s.file.text() == s.file_saved {
+                        read_file(s, &dir);
+                    }
                 }
                 return Task::none();
             }
+            SettingsMsg::FileEdit(action) => {
+                if let Some(s) = self.settings_tab().and_then(|t| t.settings.as_deref_mut()) {
+                    s.file.perform(action);
+                }
+                return Task::none();
+            }
+            SettingsMsg::FileRevert => {
+                let dir = config::config_dir(self.config_dir.as_deref());
+                if let Some(s) = self.settings_tab().and_then(|t| t.settings.as_deref_mut()) {
+                    read_file(s, &dir);
+                }
+                return Task::none();
+            }
+            SettingsMsg::FileSave => return self.save_file(),
             SettingsMsg::Picked(None) => return Task::none(),
             SettingsMsg::Picked(Some(path)) => (FieldId::DownloadDir, FieldValue::Picked(path)),
             SettingsMsg::Field(FieldId::DownloadDir, FieldValue::Browse) => {
@@ -122,6 +148,28 @@ impl App {
         self.remember_config_file();
         let old = std::mem::replace(&mut self.config, Arc::new(new));
         self.apply_settings(&old)
+    }
+
+    /// "Save" on the config.toml page: written only when it loads, then applied like an edit
+    /// made in another editor.
+    fn save_file(&mut self) -> Task<Message> {
+        let dir = config::config_dir(self.config_dir.as_deref());
+        let Some(s) = self.settings_tab().and_then(|t| t.settings.as_deref_mut()) else {
+            return Task::none();
+        };
+        let text = s.file.text();
+        match config::write_text(&dir, &text) {
+            Ok(new) => {
+                s.file_saved = text;
+                s.file_error = None;
+                self.remember_config_file();
+                self.use_config(new)
+            }
+            Err(why) => {
+                s.file_error = Some(why.to_string());
+                Task::none()
+            }
+        }
     }
 
     pub(crate) fn ssh_recovery_modal(&self) -> Option<Modal> {
@@ -259,6 +307,11 @@ impl App {
                 .detail(error.to_string());
             return self.notify(note);
         }
+        self.use_config(new)
+    }
+
+    /// Runs on `new`, a config.toml changed as a whole (another editor, the config.toml page).
+    fn use_config(&mut self, new: Config) -> Task<Message> {
         if new == *self.config {
             return Task::none();
         }
@@ -359,6 +412,22 @@ impl App {
         }
         Task::batch(tasks)
     }
+}
+
+/// Loads `dir/config.toml` into the page (a missing file reads as empty).
+fn read_file(s: &mut Settings, dir: &std::path::Path) {
+    let text = match std::fs::read_to_string(dir.join("config.toml")) {
+        Ok(text) => text,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(err) => {
+            s.file_error = Some(err.to_string());
+            return;
+        }
+    };
+    s.file = text_editor::Content::with_text(&text);
+    // The editor's own rendering of it, so "unchanged" compares like with like.
+    s.file_saved = s.file.text();
+    s.file_error = None;
 }
 
 /// Modification stamp used by the one-second config poll. Length also catches coarse timestamp
