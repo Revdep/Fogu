@@ -48,6 +48,26 @@ pub fn give_back_wayland(command: &mut std::process::Command, kept: Option<&OsSt
     }
 }
 
+/// Library overrides that belong to Fogu when it runs as an `AppImage`: its `AppRun` puts its
+/// bundled X11/xkb libraries on `LD_LIBRARY_PATH` when the host lacks some.
+pub const APPIMAGE_LIB_VARS: &[&str] = &["LD_LIBRARY_PATH", "LD_PRELOAD"];
+
+/// Whether Fogu runs as an `AppImage` (its runtime sets `APPIMAGE`).
+#[must_use]
+pub fn in_appimage() -> bool {
+    std::env::var_os("APPIMAGE").is_some()
+}
+
+/// Keeps [`APPIMAGE_LIB_VARS`] from a program Fogu starts when `appimage` ([`in_appimage`]): a
+/// desktop app opened from Fogu loads the host's libraries, not the `AppImage`'s older ones.
+pub fn drop_appimage_libs(command: &mut std::process::Command, appimage: bool) {
+    if appimage {
+        for key in APPIMAGE_LIB_VARS {
+            command.env_remove(key);
+        }
+    }
+}
+
 /// The user's home directory.
 #[must_use]
 pub fn home_dir() -> Option<PathBuf> {
@@ -235,6 +255,23 @@ mod tests {
     fn known_hosts_starts_with_fogus_own_file() {
         let files = known_hosts_files();
         assert_eq!(files.first(), Some(&config_dir().join("known_hosts")));
+    }
+
+    #[test]
+    fn programs_lose_the_appimage_libraries_only_under_an_appimage() {
+        let mut cmd = std::process::Command::new("true");
+        drop_appimage_libs(&mut cmd, true);
+        let removed: Vec<_> = cmd.get_envs().collect();
+        assert_eq!(
+            removed,
+            [
+                (OsStr::new("LD_LIBRARY_PATH"), None),
+                (OsStr::new("LD_PRELOAD"), None)
+            ]
+        );
+        let mut untouched = std::process::Command::new("true");
+        drop_appimage_libs(&mut untouched, false);
+        assert_eq!(untouched.get_envs().count(), 0, "the user's own LD_* stay");
     }
 
     #[test]

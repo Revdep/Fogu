@@ -426,6 +426,20 @@ fn the_title_bar_moves_the_window_only_once_the_pointer_moves() {
     assert!(app.bar_press.is_none(), "the move started");
 }
 
+/// The pointer enters / leaves header slot `slot` (iced keeps the hover per slot, not per tab).
+fn hover(app: &mut App, slot: usize) {
+    send(app, Message::HoverTab(slot));
+}
+
+fn leave(app: &mut App, slot: usize) {
+    send(app, Message::LeaveTab(slot));
+}
+
+/// The tab whose header shows the close `×`.
+fn close_button_on(app: &App) -> Option<TabId> {
+    app.tabs.get(app.hovered_tab?).map(|t| t.id)
+}
+
 #[test]
 fn moving_left_onto_a_tab_keeps_its_hover_and_close_button() {
     let mut app = headless();
@@ -435,12 +449,50 @@ fn moving_left_onto_a_tab_keeps_its_hover_and_close_button() {
     let ids = ids(&app);
     // Pointer moves from the third header to the second in one event: the second's enter is
     // published before the third's leave.
-    send(&mut app, Message::HoverTab(Some(ids[2])));
-    send(&mut app, Message::HoverTab(Some(ids[1])));
-    send(&mut app, Message::LeaveTab(ids[2]));
-    assert_eq!(app.hovered_tab, Some(ids[1]));
-    send(&mut app, Message::LeaveTab(ids[1]));
-    assert_eq!(app.hovered_tab, None);
+    hover(&mut app, 2);
+    hover(&mut app, 1);
+    leave(&mut app, 2);
+    assert_eq!(close_button_on(&app), Some(ids[1]));
+    leave(&mut app, 1);
+    assert_eq!(close_button_on(&app), None);
+}
+
+#[test]
+fn closing_the_hovered_tab_shows_the_close_button_of_the_next_one() {
+    let mut app = headless();
+    act(&mut app, Action::NewTab);
+    act(&mut app, Action::NewTab);
+    let ids = ids(&app);
+    // The `×` of the second tab: the third slides under the pointer, and its header keeps the
+    // slot's hover without a new enter.
+    hover(&mut app, 1);
+    send(&mut app, Message::CloseTab(ids[1]));
+    assert_eq!(close_button_on(&app), Some(ids[2]));
+}
+
+#[test]
+fn closing_a_tab_before_the_pointer_shows_the_button_under_the_pointer() {
+    let mut app = headless();
+    for _ in 0..3 {
+        act(&mut app, Action::NewTab);
+    }
+    let ids = ids(&app);
+    hover(&mut app, 2);
+    send(&mut app, Message::CloseTab(ids[0]));
+    assert_eq!(close_button_on(&app), Some(ids[3]));
+}
+
+#[test]
+fn closing_the_hovered_last_tab_shows_no_close_button() {
+    let mut app = headless();
+    act(&mut app, Action::NewTab);
+    let ids = ids(&app);
+    hover(&mut app, 1);
+    send(&mut app, Message::CloseTab(ids[1]));
+    assert_eq!(close_button_on(&app), None);
+    // A tab opened into that slot later is not under the pointer for iced either.
+    act(&mut app, Action::NewTab);
+    assert_eq!(close_button_on(&app), None);
 }
 
 #[test]

@@ -103,11 +103,12 @@ pub enum Message {
     Action(Action),
     /// Middle-click or `×` on a tab header.
     CloseTab(TabId),
-    /// The pointer entered (`Some`) or left (`None`) a tab header.
-    HoverTab(Option<TabId>),
-    /// The pointer left tab header `.0` (clears the hover only if it is still that tab's:
+    /// The pointer entered header slot `.0` (a position in the bar, as iced tracks hover: a tab
+    /// sliding under a still pointer keeps the slot's hover without a new enter).
+    HoverTab(usize),
+    /// The pointer left header slot `.0` (clears the hover only if it is still that slot's:
     /// moving left, the next header's enter arrives before this one's leave).
-    LeaveTab(TabId),
+    LeaveTab(usize),
     /// The pointer moved over the tab bar (window coordinates); anchors the tab menu.
     TabBarCursor(Point),
     /// The tab strip scrolled or resized (only reported while it overflows).

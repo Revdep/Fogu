@@ -112,7 +112,8 @@ pub struct Rename {
 pub struct TabBar<'a> {
     pub tabs: &'a [Tab],
     pub active: TabId,
-    pub hovered: Option<TabId>,
+    /// The header slot under the pointer.
+    pub hovered: Option<usize>,
     pub renaming: Option<&'a Rename>,
     pub look: Look,
     /// The active tab has an SSH pane: show the SFTP button (`true` = panel open).
@@ -162,10 +163,10 @@ fn solid<'a>(color: Color, width: Length, height: f32) -> Element<'a, Message> {
 
 impl<'a> TabBar<'a> {
     #[expect(clippy::too_many_lines, reason = "one widget tree, top to bottom")]
-    fn header(&self, tab: &'a Tab, tab_w: f32) -> Element<'a, Message> {
+    fn header(&self, slot: usize, tab: &'a Tab, tab_w: f32) -> Element<'a, Message> {
         let look = self.look;
         let active = tab.id == self.active;
-        let hovered = self.hovered == Some(tab.id);
+        let hovered = self.hovered == Some(slot);
         let fg = match (active, hovered) {
             (true, _) | (false, true) => look.fg,
             (false, false) => look.dim,
@@ -272,8 +273,8 @@ impl<'a> TabBar<'a> {
             .on_middle_press(Message::CloseTab(tab.id))
             .on_double_click(Message::StartRename(tab.id))
             .on_right_press(Message::OpenTabMenu(tab.id))
-            .on_enter(Message::HoverTab(Some(tab.id)))
-            .on_exit(Message::LeaveTab(tab.id))
+            .on_enter(Message::HoverTab(slot))
+            .on_exit(Message::LeaveTab(slot))
             .into()
     }
 
@@ -293,8 +294,13 @@ impl<'a> TabBar<'a> {
         );
         let toggles = usize::from(self.forwards.is_some()) + usize::from(self.sftp.is_some()) + 2;
         let tab_w = tab_w(self.width, self.inset, toggles, self.tabs.len());
-        let headers = Row::with_children(self.tabs.iter().map(|tab| self.header(tab, tab_w)))
-            .spacing(TAB_GAP);
+        let headers = Row::with_children(
+            self.tabs
+                .iter()
+                .enumerate()
+                .map(|(slot, tab)| self.header(slot, tab, tab_w)),
+        )
+        .spacing(TAB_GAP);
         let scroller = Scrollbar::new().width(2).scroller_width(2);
         let strip = scrollable(headers)
             .id(Id::new(TAB_STRIP))

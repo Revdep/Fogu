@@ -56,7 +56,8 @@ pub struct App {
     pub(crate) active: TabId,
     pub(crate) menu: Option<ContextMenu>,
     pub(crate) renaming: Option<Rename>,
-    pub(crate) hovered_tab: Option<TabId>,
+    /// The header slot under the pointer (see [`Message::HoverTab`]).
+    pub(crate) hovered_tab: Option<usize>,
     /// Last pointer position over the tab bar: the tab menu's anchor.
     pub(crate) tab_bar_cursor: Point,
     /// Where the bar's empty area was pressed, until the pointer moves (then the window moves).

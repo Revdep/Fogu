@@ -316,12 +316,17 @@ fn spawn_proxy(
                 .filter(|s| std::path::Path::new(s).is_absolute())
                 .unwrap_or_else(|| "/bin/sh".into());
             // Inherits Fogu's environment: no `WAYLAND_DISPLAY` when Fogu runs on XWayland, which
-            // only matters for a GUI askpass/pinentry started by the command.
+            // only matters for a GUI askpass/pinentry started by the command; nor the AppImage's
+            // libraries, which that askpass must not load.
             let mut process = Command::new(shell);
             process
                 .arg("-c")
                 .arg(format!("exec {command}"))
                 .process_group(0);
+            fogu_core::platform::drop_appimage_libs(
+                process.as_std_mut(),
+                fogu_core::platform::in_appimage(),
+            );
             process
         }
         #[cfg(windows)]

@@ -78,18 +78,12 @@ jobs:
       - name: AppImage and signed-archive layout
         if: runner.os == 'Linux'
         run: |
-          mkdir -p Fogu.AppDir/usr/bin Fogu.AppDir/usr/share/doc/fogu
-          cp target/release/fogu Fogu.AppDir/usr/bin/
-          cp LICENSE THIRD_PARTY_LICENSES THIRD_PARTY_CRATES assets/fonts/*-LICENSE.txt Fogu.AppDir/usr/share/doc/fogu/
-          cp assets/fogu.desktop Fogu.AppDir/
-          cp assets/icons/fogu-256.png Fogu.AppDir/fogu.png
-          ln -s usr/bin/fogu Fogu.AppDir/AppRun
-          curl -fsSLo target/updater-e2e/appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
-          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  target/updater-e2e/appimagetool" | sha256sum -c -
-          chmod +x target/updater-e2e/appimagetool
-          APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 target/updater-e2e/appimagetool Fogu.AppDir Fogu-x86_64.AppImage
+          scripts/package-appimage.sh
           test "$(APPIMAGE_EXTRACT_AND_RUN=1 ./Fogu-x86_64.AppImage --version)" = "fogu ${GITHUB_REF_NAME#v}"
           tar czf Fogu-linux-appimage-x86_64.tar.gz Fogu-x86_64.AppImage
+      - name: AppImage starts on a bare system
+        if: runner.os == 'Linux'
+        run: scripts/appimage-smoke.sh Fogu-x86_64.AppImage
       - uses: actions/upload-artifact@v7
         with:
           name: Fogu-${{ matrix.name }}
