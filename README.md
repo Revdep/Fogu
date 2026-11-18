@@ -298,7 +298,9 @@ No Homebrew? Use [rustup.rs](https://rustup.rs) instead.
 <summary><b>SFTP browser</b></summary>
 
 - Side panel on the same SSH connection: no second login
-- Follows the shell's working directory as you `cd`
+- Follows the shell's working directory as you `cd`, when the remote shell reports it (OSC 7):
+  fish does; for bash and zsh, *How to enable* next to *Follow shell* explains and copies a
+  snippet for `~/.bashrc` or `~/.zshrc` on the server
 - Upload, download, drag and drop, rename, delete, new folder, permissions
 - Dropping files from the file manager needs X11 on Linux: under Wayland, turn on Settings → SFTP
   → *Enable drag & drop on Wayland* and restart; Fogu then opens on XWayland, so on HiDPI screens

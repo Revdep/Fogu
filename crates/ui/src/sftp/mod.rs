@@ -146,6 +146,10 @@ pub enum PanelMsg {
     Follow(bool),
     /// "cd terminal here": type `cd -- '<path>'` into the panel's shell.
     CdHere,
+    /// "How to enable": open the dialog explaining the OSC 7 snippet.
+    CwdSetup,
+    /// Its answer: `true` copies the snippet.
+    CwdSetupDone(bool),
 }
 
 impl PanelMsg {
@@ -392,7 +396,10 @@ impl SftpPanelState {
 
     /// Whether a dialog (conflict, delete, permissions) is open over the window.
     pub fn dialog_open(&self) -> bool {
-        self.conflicts.current().is_some() || self.ops.delete.is_some() || self.ops.chmod.is_some()
+        self.conflicts.current().is_some()
+            || self.ops.delete.is_some()
+            || self.ops.chmod.is_some()
+            || self.ops.cwd_setup
     }
 }
 

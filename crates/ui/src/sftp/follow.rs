@@ -9,6 +9,8 @@
 
 use std::path::Path;
 
+use iced::clipboard;
+
 use fogu_core::shellquote::cd_command;
 use fogu_session::SftpRequest;
 use iced::Task;
@@ -46,7 +48,28 @@ impl SftpPanelState {
     }
 }
 
+/// bash/zsh hook that reports the cwd (OSC 7) at every prompt; the user adds it to the remote
+/// rc file themselves (Fogu never types setup commands into a session). `$PWD` is percent-encoded
+/// byte by byte: a directory name holding ESC/BEL must not end the sequence and inject another.
+/// `& 255`: bash 3.2 (macOS /bin/bash) reads bytes >= 0x80 as negative (`è` -> %FFFFFFFFFFFFFFC3).
+pub(crate) const OSC7_SNIPPET: &str = r#"__fogu_osc7() { local LC_ALL=C s="$PWD" o= c i; for ((i=0; i<${#s}; i++)); do c=${s:$i:1}; case $c in [-/._~A-Za-z0-9]) o+=$c;; *) printf -v c '%d' "'$c"; printf -v c '%%%02X' $((c & 255)); o+=$c;; esac; done; printf '\033]7;file://%s%s\033\\' "${HOSTNAME:-$HOST}" "$o"; }
+if [ -n "$ZSH_VERSION" ]; then precmd_functions+=(__fogu_osc7); else PROMPT_COMMAND="__fogu_osc7${PROMPT_COMMAND:+;$PROMPT_COMMAND}"; fi
+"#;
+
 impl App {
+    /// The setup dialog's answer: closes it; `copy` puts the snippet on the clipboard.
+    pub(super) fn cwd_setup_done(&mut self, tab: crate::tab::TabId, copy: bool) -> Task<Message> {
+        if let Some((panel, _)) = self.panel_of(tab) {
+            panel.ops.cwd_setup = false;
+        }
+        if !copy {
+            return Task::none();
+        }
+        let note = Notification::new(Level::Info, "Snippet copied")
+            .detail("Paste it at the end of ~/.bashrc or ~/.zshrc on the server.");
+        Task::batch([clipboard::write(OSC7_SNIPPET.to_owned()), self.notify(note)])
+    }
+
     /// A remote cwd report from pane `pane`: kept on the pane (a panel opened later starts
     /// there) and passed to the panel bound to that pane.
     pub(crate) fn on_remote_cwd(&mut self, pane: PaneId, path: &Path) -> Task<Message> {
@@ -94,5 +117,54 @@ impl App {
         let note = Notification::new(Level::Warn, "cd terminal here")
             .detail("The terminal is not connected.");
         self.notify(note)
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    use fogu_term::{OscEvent, OscScanner};
+
+    use super::OSC7_SNIPPET;
+
+    /// The snippet, sourced in a real shell, reports a cwd the scanner reads back, even with
+    /// escape sequences, `%` and non-ASCII in the name (shells not installed are skipped).
+    #[test]
+    fn osc7_snippet_reports_the_cwd() {
+        let dir = std::env::temp_dir().join("fogu osc7 \x1b]52;c;eA==\x07 %41 è");
+        std::fs::create_dir_all(&dir).unwrap();
+        // the shell reports the path it was given ($PWD), so give it the real one: on macOS the
+        // temp dir is under /var, a symlink to /private/var
+        let dir = dir.canonicalize().unwrap();
+        let prompt = [
+            ("bash", r#"eval "$PROMPT_COMMAND""#),
+            ("zsh", "for f in $precmd_functions; do $f; done"),
+        ];
+        for (shell, run_prompt) in prompt {
+            let script = format!("{OSC7_SNIPPET}cd \"$1\" && {run_prompt}");
+            let Ok(out) = Command::new(shell)
+                .args(["-c", &script, shell])
+                .arg(&dir)
+                .output()
+            else {
+                continue;
+            };
+            let events = OscScanner::new().scan(&out.stdout);
+            let paths: Vec<PathBuf> = events
+                .into_iter()
+                .filter_map(|e| match e {
+                    OscEvent::Cwd { path, .. } => Some(path),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(
+                paths,
+                std::slice::from_ref(&dir),
+                "{shell}: {:?}",
+                String::from_utf8_lossy(&out.stdout)
+            );
+        }
     }
 }

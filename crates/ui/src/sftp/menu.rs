@@ -26,6 +26,7 @@ impl App {
             PanelMsg::CopyPath(name) => return self.copy_path(tab, &name),
             PanelMsg::DownloadOpen(name) => return self.download_entry(tab, &name, true),
             PanelMsg::CdHere => return self.cd_here(tab),
+            PanelMsg::CwdSetupDone(copy) => return self.cwd_setup_done(tab, copy),
             _ => {}
         }
         let Some((panel, tx)) = self.panel_of(tab) else {
@@ -70,6 +71,10 @@ impl App {
                 }
                 Ok(()) => Ok(()),
             },
+            PanelMsg::CwdSetup => {
+                panel.ops.cwd_setup = true;
+                Ok(())
+            }
             PanelMsg::Delete => panel.start_delete(&tx),
             PanelMsg::DeleteConfirm(true) => panel.confirm_delete(&tx),
             PanelMsg::DeleteConfirm(false) => {

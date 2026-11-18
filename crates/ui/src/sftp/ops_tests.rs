@@ -298,3 +298,23 @@ fn remote_cwd_moves_the_panel_and_cd_here_types_a_quoted_cd() {
     let _ = app.update(Message::Sftp(SftpMsg::Panel(tab, PanelMsg::Up)));
     assert!(!app.active_tab().unwrap().sftp.as_ref().unwrap().follow);
 }
+
+#[test]
+fn follow_setup_asks_before_copying() {
+    fn panel(app: &mut crate::app::App, tab: crate::tab::TabId) -> &mut SftpPanelState {
+        app.panel_of(tab).unwrap().0
+    }
+    let (mut app, tab, _pane) = app_with_panel();
+    let _ = app.update(Message::Sftp(SftpMsg::Panel(tab, PanelMsg::CwdSetup)));
+    assert!(panel(&mut app, tab).dialog_open());
+    assert!(dialog(tab, panel(&mut app, tab)).is_some());
+    let _ = app.update(Message::Sftp(SftpMsg::Panel(
+        tab,
+        PanelMsg::CwdSetupDone(false),
+    )));
+    assert!(!panel(&mut app, tab).dialog_open());
+    // Escape closes it too.
+    let _ = app.update(Message::Sftp(SftpMsg::Panel(tab, PanelMsg::CwdSetup)));
+    assert!(panel(&mut app, tab).cancel_op());
+    assert!(!panel(&mut app, tab).dialog_open());
+}
