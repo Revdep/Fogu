@@ -56,6 +56,8 @@ pub struct Ops {
     pub edit: Option<NameEdit>,
     pub delete: Option<DeleteDialog>,
     pub chmod: Option<ChmodDialog>,
+    /// The "Follow shell" setup dialog is open.
+    pub cwd_setup: bool,
     /// The entry the next `MenuAt` opens its menu for (set by the entry's right-press).
     pub menu_target: Option<String>,
 }
@@ -252,6 +254,7 @@ impl SftpPanelState {
         self.ops.edit.take().is_some()
             || self.ops.delete.take().is_some()
             || self.ops.chmod.take().is_some()
+            || std::mem::take(&mut self.ops.cwd_setup)
     }
 
     /// An operation ended (`Done` or `Error`): refresh the directory once the last one of

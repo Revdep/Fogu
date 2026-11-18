@@ -292,7 +292,8 @@ pub fn view<'a>(
         .into()
 }
 
-/// "Follow shell" switch; when off and the terminal is elsewhere, a "resume" link.
+/// "Follow shell" switch; when off and the terminal is elsewhere, a "resume" link; when on and
+/// the shell never reported its cwd, a "How to enable" link (the OSC 7 setup dialog).
 fn follow_controls(tab: TabId, panel: &SftpPanelState, look: Look) -> Element<'_, Message> {
     let toggle = row![
         label("Follow shell", look.dim).size(12),
@@ -308,14 +309,16 @@ fn follow_controls(tab: TabId, panel: &SftpPanelState, look: Look) -> Element<'_
         .shell_cwd
         .as_ref()
         .is_some_and(|cwd| panel.path.as_ref() != Some(cwd));
-    if panel.follow || !elsewhere {
-        return toggle.into();
-    }
+    let (link, action) = match (panel.follow, panel.shell_cwd.is_some()) {
+        (true, false) => ("How to enable", PanelMsg::CwdSetup),
+        (false, _) if elsewhere => ("resume", PanelMsg::Follow(true)),
+        _ => return toggle.into(),
+    };
     row![
-        button(text("resume").size(12))
+        button(text(link).size(12))
             .padding([2, 6])
             .style(style::btn(look, Btn::Ghost))
-            .on_press(msg(tab, PanelMsg::Follow(true))),
+            .on_press(msg(tab, action)),
         toggle,
     ]
     .spacing(4)

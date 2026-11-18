@@ -1,5 +1,5 @@
-//! The panel's modal dialogs: "file exists" (`conflict.rs`), delete confirmation and
-//! permissions. One at a time, in that order.
+//! The panel's modal dialogs: "file exists" (`conflict.rs`), delete confirmation,
+//! permissions and the "Follow shell" setup. One at a time, in that order.
 
 use iced::widget::{Space, button, checkbox, column, container, row, text, text_input};
 use iced::{Alignment, Element, Length};
@@ -18,6 +18,45 @@ pub fn dialog(tab: TabId, panel: &SftpPanelState) -> Option<Element<'_, Message>
     super::conflict::conflict_dialog(tab, panel)
         .or_else(|| delete_dialog(tab, panel))
         .or_else(|| chmod_dialog(tab, panel))
+        .or_else(|| cwd_setup_dialog(tab, panel))
+}
+
+/// "Follow shell" setup: what the snippet does, the snippet itself, and copy / cancel.
+fn cwd_setup_dialog(tab: TabId, panel: &SftpPanelState) -> Option<Element<'_, Message>> {
+    if !panel.ops.cwd_setup {
+        return None;
+    }
+    let buttons = row![
+        button(text("Copy snippet"))
+            .style(crate::style::primary)
+            .on_press(msg(tab, PanelMsg::CwdSetupDone(true))),
+        button(text("Cancel"))
+            .style(crate::style::secondary)
+            .on_press(msg(tab, PanelMsg::CwdSetupDone(false))),
+    ]
+    .spacing(8);
+    let content = column![
+        text("Follow the shell's folder").size(18),
+        text(
+            "The shell on this server does not tell Fogu which folder it is in, so the panel \
+             cannot follow your cd. bash and zsh need a small hook for that (fish already \
+             sends it).\n\nCopy snippet puts the lines below on the clipboard. Paste them at \
+             the end of ~/.bashrc or ~/.zshrc on the server, then open a new shell. Fogu \
+             changes nothing on the server by itself."
+        )
+        .wrapping(text::Wrapping::WordOrGlyph),
+        container(
+            text(super::follow::OSC7_SNIPPET)
+                .font(iced::Font::MONOSPACE)
+                .size(11)
+                .wrapping(text::Wrapping::WordOrGlyph)
+        )
+        .padding(8)
+        .style(container::bordered_box),
+        buttons,
+    ]
+    .spacing(12);
+    Some(modal::frame(content.into(), 560.0))
 }
 
 fn delete_dialog(tab: TabId, panel: &SftpPanelState) -> Option<Element<'_, Message>> {
