@@ -365,7 +365,9 @@ fn pty_io(err: pty_process::Error) -> io::Error {
     match err {
         pty_process::Error::Io(err) => err,
         pty_process::Error::Rustix(errno) => errno.into(),
-        err @ pty_process::Error::Unsplit(..) => io::Error::other(err.to_string()),
+        err @ (pty_process::Error::TokioAsyncFd(_) | pty_process::Error::Unsplit(..)) => {
+            io::Error::other(err.to_string())
+        }
     }
 }
 

@@ -18,7 +18,7 @@ version = "0.1.8"
 # widget; no codecs (we decode, bounded); no desktop-theme detection (it pulls mundy + zbus).
 iced = { version = "=0.14.0", default-features = false, features = ["wgpu", "tiny-skia", "crisp", "web-colors", "thread-pool", "x11", "wayland", "advanced", "image-without-codecs"] }
 # why: rasterizes the title-bar icons; already in the tree as iced's software renderer
-tiny-skia = { version = "=0.11.4", default-features = false, features = ["std", "simd"] }
+tiny-skia = { version = "=0.12.0", default-features = false, features = ["std", "simd"] }
 # why: structured logging
 tracing = "0.1.44"
 # why: login-script patterns: linear time with a size limit, so a pattern can't stall a session
@@ -81,7 +81,7 @@ windows-sys = { version = "0.61.2", features = [
 ] }
 
 # why: native file pickers; `xdg-portal` only (no GTK)
-rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
+rfd = { version = "0.18.0", default-features = false, features = ["xdg-portal"] }
 # why: open a path or URL with the desktop's default application
 open = "5.4.4"
 # why: tab background images with size limits; the same 0.25 iced uses, PNG/JPEG/WebP only
