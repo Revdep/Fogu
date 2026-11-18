@@ -81,7 +81,7 @@ windows-sys = { version = "0.61.2", features = [
 ] }
 
 # why: native file pickers; `xdg-portal` only (no GTK)
-rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
+rfd = { version = "0.18.0", default-features = false, features = ["xdg-portal"] }
 # why: open a path or URL with the desktop's default application
 open = "5.4.4"
 # why: tab background images with size limits; the same 0.25 iced uses, PNG/JPEG/WebP only
