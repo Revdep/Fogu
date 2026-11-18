@@ -1,0 +1,26 @@
+# Dependency updates as PRs, so their ci run tests them on Linux, macOS and Windows.
+# A new RustSec advisory still fails the nightly `cargo deny check`; the security PRs that
+# fix it come from "Dependabot security updates" (repo Settings > Code security), which
+# reads this file for grouping and labels.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    # the root workspace and the separate fuzz workspace (own Cargo.lock)
+    directories: ["/", "/fuzz"]
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # one PR for all compatible bumps instead of one per crate
+      cargo-compatible:
+        update-types: [minor, patch]
+      cargo-security:
+        applies-to: security-updates
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
