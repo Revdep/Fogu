@@ -16,6 +16,9 @@ ignore = [
     "RUSTSEC-2026-0370", # zvariant
     "RUSTSEC-2026-0371", # zbus_names
     "RUSTSEC-2026-0372", # zvariant_derive
+    # unmaintained, no vulnerability; pulled only by russh-sftp (3.0.1 is the latest, still on
+    # chrono); revisit when russh-sftp drops or replaces it.
+    "RUSTSEC-2026-0543", # chrono, via russh-sftp
 ]
 
 [licenses]
